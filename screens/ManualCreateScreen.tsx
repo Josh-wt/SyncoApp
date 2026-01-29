@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Keyboard,
@@ -9,7 +9,6 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   TouchableWithoutFeedback,
   View,
 } from 'react-native';
@@ -18,6 +17,291 @@ import { BackIcon, CalendarSmallIcon, ScheduleIcon, CheckAllIcon, GlowTopRight, 
 import RecurringRuleModal from '../components/RecurringRuleModal';
 import { createRecurringRule, getRecurringRules } from '../lib/reminders';
 import { CreateReminderInput, NOTIFICATION_TIMING_OPTIONS, RecurringOption, RecurringRule } from '../lib/types';
+
+// Animated Card Component
+function AnimatedCard({
+  onPress,
+  children,
+  style,
+}: {
+  onPress?: () => void;
+  children: React.ReactNode;
+  style?: object;
+}) {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const translateYAnim = useRef(new Animated.Value(0)).current;
+  const glowAnim = useRef(new Animated.Value(0)).current;
+
+  const handlePressIn = () => {
+    Animated.parallel([
+      Animated.spring(scaleAnim, {
+        toValue: 0.98,
+        useNativeDriver: true,
+        tension: 300,
+        friction: 10,
+      }),
+      Animated.timing(translateYAnim, {
+        toValue: 1,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(glowAnim, {
+        toValue: 1,
+        duration: 150,
+        useNativeDriver: false,
+      }),
+    ]).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.parallel([
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        useNativeDriver: true,
+        tension: 300,
+        friction: 10,
+      }),
+      Animated.spring(translateYAnim, {
+        toValue: 0,
+        useNativeDriver: true,
+        tension: 300,
+        friction: 10,
+      }),
+      Animated.timing(glowAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: false,
+      }),
+    ]).start();
+  };
+
+  const animatedBorderColor = glowAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['rgba(0, 255, 255, 0.1)', 'rgba(0, 255, 255, 0.4)'],
+  });
+
+  if (!onPress) {
+    return <View style={style}>{children}</View>;
+  }
+
+  return (
+    <Pressable onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
+      <Animated.View
+        style={[
+          style,
+          {
+            transform: [{ scale: scaleAnim }, { translateY: translateYAnim }],
+            borderColor: animatedBorderColor,
+          },
+        ]}
+      >
+        {children}
+      </Animated.View>
+    </Pressable>
+  );
+}
+
+// Animated Back Button
+function AnimatedBackButton({ onPress }: { onPress: () => void }) {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 0.9,
+      useNativeDriver: true,
+      tension: 400,
+      friction: 10,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      tension: 400,
+      friction: 10,
+    }).start();
+  };
+
+  return (
+    <Pressable onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
+      <Animated.View style={[styles.backButton, { transform: [{ scale: scaleAnim }] }]}>
+        <BackIcon />
+      </Animated.View>
+    </Pressable>
+  );
+}
+
+// Animated Save Button
+function AnimatedSaveButton({
+  onPress,
+  disabled,
+  isSaving,
+}: {
+  onPress: () => void;
+  disabled: boolean;
+  isSaving: boolean;
+}) {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const translateYAnim = useRef(new Animated.Value(0)).current;
+
+  const handlePressIn = () => {
+    if (disabled) return;
+    Animated.parallel([
+      Animated.spring(scaleAnim, {
+        toValue: 0.97,
+        useNativeDriver: true,
+        tension: 300,
+        friction: 10,
+      }),
+      Animated.timing(translateYAnim, {
+        toValue: 2,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.parallel([
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        useNativeDriver: true,
+        tension: 300,
+        friction: 10,
+      }),
+      Animated.spring(translateYAnim, {
+        toValue: 0,
+        useNativeDriver: true,
+        tension: 300,
+        friction: 10,
+      }),
+    ]).start();
+  };
+
+  return (
+    <Pressable
+      onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      disabled={disabled}
+    >
+      <Animated.View
+        style={[
+          styles.saveButton,
+          disabled && styles.saveButtonDisabled,
+          {
+            transform: [{ scale: scaleAnim }, { translateY: translateYAnim }],
+          },
+        ]}
+      >
+        <Text style={styles.saveButtonText}>
+          {isSaving ? 'Saving...' : 'Save Reminder'}
+        </Text>
+        {!isSaving && <CheckAllIcon />}
+      </Animated.View>
+    </Pressable>
+  );
+}
+
+// Animated Picker Option
+function AnimatedPickerOptionItem({
+  onPress,
+  isSelected,
+  label,
+}: {
+  onPress: () => void;
+  isSelected: boolean;
+  label: string;
+}) {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 0.97,
+      useNativeDriver: true,
+      tension: 400,
+      friction: 10,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      tension: 400,
+      friction: 10,
+    }).start();
+  };
+
+  return (
+    <Pressable onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
+      <Animated.View
+        style={[
+          styles.pickerOption,
+          isSelected && styles.pickerOptionSelected,
+          { transform: [{ scale: scaleAnim }] },
+        ]}
+      >
+        <Text style={[styles.pickerOptionText, isSelected && styles.pickerOptionTextSelected]}>
+          {label}
+        </Text>
+      </Animated.View>
+    </Pressable>
+  );
+}
+
+// Animated Confirm Button
+function AnimatedConfirmButton({ onPress, label }: { onPress: () => void; label: string }) {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const translateYAnim = useRef(new Animated.Value(0)).current;
+
+  const handlePressIn = () => {
+    Animated.parallel([
+      Animated.spring(scaleAnim, {
+        toValue: 0.97,
+        useNativeDriver: true,
+        tension: 300,
+        friction: 10,
+      }),
+      Animated.timing(translateYAnim, {
+        toValue: 2,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.parallel([
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        useNativeDriver: true,
+        tension: 300,
+        friction: 10,
+      }),
+      Animated.spring(translateYAnim, {
+        toValue: 0,
+        useNativeDriver: true,
+        tension: 300,
+        friction: 10,
+      }),
+    ]).start();
+  };
+
+  return (
+    <Pressable onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
+      <Animated.View
+        style={[
+          styles.pickerConfirm,
+          { transform: [{ scale: scaleAnim }, { translateY: translateYAnim }] },
+        ]}
+      >
+        <Text style={styles.pickerConfirmText}>{label}</Text>
+      </Animated.View>
+    </Pressable>
+  );
+}
 
 interface ManualCreateScreenProps {
   onBack: () => void;
@@ -211,9 +495,7 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
             >
               {/* Header */}
               <View style={styles.header}>
-                <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.7}>
-                  <BackIcon />
-                </TouchableOpacity>
+                <AnimatedBackButton onPress={onBack} />
                 <Text style={styles.headerTitle}>New Reminder</Text>
                 <View style={styles.headerSpacer} />
               </View>
@@ -237,9 +519,8 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
 
                 {/* Date & Time Row */}
                 <View style={styles.dateTimeRow}>
-                  <TouchableOpacity
+                  <AnimatedCard
                     style={styles.dateTimeCard}
-                    activeOpacity={0.7}
                     onPress={() => {
                       setTempDate(selectedDate);
                       setShowDatePicker(true);
@@ -250,11 +531,10 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
                       <Text style={styles.dateTimeLabel}>Date</Text>
                     </View>
                     <Text style={styles.dateTimeValue}>{formatDateDisplay(selectedDate)}</Text>
-                  </TouchableOpacity>
+                  </AnimatedCard>
 
-                  <TouchableOpacity
+                  <AnimatedCard
                     style={styles.dateTimeCard}
-                    activeOpacity={0.7}
                     onPress={() => {
                       setTempTime(selectedTime);
                       setShowTimePicker(true);
@@ -265,13 +545,12 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
                       <Text style={styles.dateTimeLabel}>Time</Text>
                     </View>
                     <Text style={styles.dateTimeValue}>{formatTimeDisplay(selectedTime)}</Text>
-                  </TouchableOpacity>
+                  </AnimatedCard>
                 </View>
 
                 {/* Notification Timing Card */}
-                <TouchableOpacity
+                <AnimatedCard
                   style={styles.notifyCard}
-                  activeOpacity={0.7}
                   onPress={() => {
                     setTempNotifyMinutes(notifyBeforeMinutes);
                     setShowNotifyPicker(true);
@@ -284,12 +563,11 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
                     <Text style={styles.dateTimeLabel}>Notify</Text>
                   </View>
                   <Text style={styles.notifyValue}>{getNotifyLabel(notifyBeforeMinutes)}</Text>
-                </TouchableOpacity>
+                </AnimatedCard>
 
                 {/* Recurring Reminder Card */}
-                <TouchableOpacity
+                <AnimatedCard
                   style={styles.recurringCard}
-                  activeOpacity={0.7}
                   onPress={() => setShowRecurringPicker(true)}
                 >
                   <View style={styles.recurringCardLeft}>
@@ -304,7 +582,7 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
                     </View>
                   </View>
                   <ChevronRightIcon opacity={0.3} />
-                </TouchableOpacity>
+                </AnimatedCard>
 
                 {/* Notes Card */}
                 <View style={styles.card}>
@@ -346,79 +624,66 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
         {/* Floating Save Button */}
         <View style={[styles.floatingFooter, { bottom: insets.bottom + 24 }]}>
           <View style={styles.floatingFooterInner}>
-            <TouchableOpacity
-              style={[styles.saveButton, (!title.trim() || isSaving) && styles.saveButtonDisabled]}
-              activeOpacity={0.9}
+            <AnimatedSaveButton
               onPress={handleSave}
               disabled={!title.trim() || isSaving}
-            >
-              <Text style={styles.saveButtonText}>
-                {isSaving ? 'Saving...' : 'Save Reminder'}
-              </Text>
-              {!isSaving && <CheckAllIcon />}
-            </TouchableOpacity>
+              isSaving={isSaving}
+            />
           </View>
         </View>
 
         {/* Date Picker Modal */}
         {showDatePicker && (
           <View style={styles.modalOverlay}>
-            <TouchableOpacity
+            <Pressable
               style={styles.modalBackdrop}
-              activeOpacity={1}
               onPress={() => setShowDatePicker(false)}
             />
-            <View style={[styles.pickerModal, { paddingBottom: insets.bottom + 16 }]}>
+            <Animated.View style={[styles.pickerModal, { paddingBottom: insets.bottom + 16 }]}>
               <View style={styles.pickerHeader}>
                 <Text style={styles.pickerTitle}>Select Date</Text>
-                <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                <Pressable onPress={() => setShowDatePicker(false)}>
                   <Text style={styles.pickerCancel}>Cancel</Text>
-                </TouchableOpacity>
+                </Pressable>
               </View>
               <ScrollView style={styles.pickerScroll} showsVerticalScrollIndicator={false}>
                 {dateOptions.map((date, index) => {
                   const isSelected = date.toDateString() === tempDate.toDateString();
                   const isToday = date.toDateString() === new Date().toDateString();
                   return (
-                    <TouchableOpacity
+                    <AnimatedPickerOptionItem
                       key={index}
-                      style={[styles.pickerOption, isSelected && styles.pickerOptionSelected]}
                       onPress={() => setTempDate(date)}
-                    >
-                      <Text style={[styles.pickerOptionText, isSelected && styles.pickerOptionTextSelected]}>
-                        {isToday ? 'Today' : formatDateDisplay(date)}
-                      </Text>
-                    </TouchableOpacity>
+                      isSelected={isSelected}
+                      label={isToday ? 'Today' : formatDateDisplay(date)}
+                    />
                   );
                 })}
               </ScrollView>
-              <TouchableOpacity
-                style={styles.pickerConfirm}
+              <AnimatedConfirmButton
                 onPress={() => {
                   setSelectedDate(tempDate);
                   setShowDatePicker(false);
                 }}
-              >
-                <Text style={styles.pickerConfirmText}>Confirm</Text>
-              </TouchableOpacity>
-            </View>
+                label="Confirm"
+              />
+            </Animated.View>
           </View>
         )}
 
         {/* Time Picker Modal */}
         {showTimePicker && (
           <View style={styles.modalOverlay}>
-            <TouchableOpacity
+            <Pressable
               style={styles.modalBackdrop}
-              activeOpacity={1}
               onPress={() => setShowTimePicker(false)}
             />
-            <View style={[styles.pickerModal, { paddingBottom: insets.bottom + 16 }]}>
+            <Animated.View style={[styles.pickerModal, { paddingBottom: insets.bottom + 16 }]}>
               <View style={styles.pickerHeader}>
                 <Text style={styles.pickerTitle}>Select Time</Text>
-                <TouchableOpacity onPress={() => setShowTimePicker(false)}>
+                <Pressable onPress={() => setShowTimePicker(false)}>
                   <Text style={styles.pickerCancel}>Cancel</Text>
-                </TouchableOpacity>
+                </Pressable>
               </View>
               <ScrollView style={styles.pickerScroll} showsVerticalScrollIndicator={false}>
                 {timeOptions.map((time, index) => {
@@ -426,72 +691,61 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
                     time.getHours() === tempTime.getHours() &&
                     time.getMinutes() === tempTime.getMinutes();
                   return (
-                    <TouchableOpacity
+                    <AnimatedPickerOptionItem
                       key={index}
-                      style={[styles.pickerOption, isSelected && styles.pickerOptionSelected]}
                       onPress={() => setTempTime(time)}
-                    >
-                      <Text style={[styles.pickerOptionText, isSelected && styles.pickerOptionTextSelected]}>
-                        {formatTimeDisplay(time)}
-                      </Text>
-                    </TouchableOpacity>
+                      isSelected={isSelected}
+                      label={formatTimeDisplay(time)}
+                    />
                   );
                 })}
               </ScrollView>
-              <TouchableOpacity
-                style={styles.pickerConfirm}
+              <AnimatedConfirmButton
                 onPress={() => {
                   setSelectedTime(tempTime);
                   setShowTimePicker(false);
                 }}
-              >
-                <Text style={styles.pickerConfirmText}>Confirm</Text>
-              </TouchableOpacity>
-            </View>
+                label="Confirm"
+              />
+            </Animated.View>
           </View>
         )}
 
         {/* Notification Timing Picker Modal */}
         {showNotifyPicker && (
           <View style={styles.modalOverlay}>
-            <TouchableOpacity
+            <Pressable
               style={styles.modalBackdrop}
-              activeOpacity={1}
               onPress={() => setShowNotifyPicker(false)}
             />
-            <View style={[styles.pickerModal, { paddingBottom: insets.bottom + 16 }]}>
+            <Animated.View style={[styles.pickerModal, { paddingBottom: insets.bottom + 16 }]}>
               <View style={styles.pickerHeader}>
                 <Text style={styles.pickerTitle}>Notification Timing</Text>
-                <TouchableOpacity onPress={() => setShowNotifyPicker(false)}>
+                <Pressable onPress={() => setShowNotifyPicker(false)}>
                   <Text style={styles.pickerCancel}>Cancel</Text>
-                </TouchableOpacity>
+                </Pressable>
               </View>
               <ScrollView style={styles.pickerScroll} showsVerticalScrollIndicator={false}>
                 {NOTIFICATION_TIMING_OPTIONS.map((option) => {
                   const isSelected = option.value === tempNotifyMinutes;
                   return (
-                    <TouchableOpacity
+                    <AnimatedPickerOptionItem
                       key={option.value}
-                      style={[styles.pickerOption, isSelected && styles.pickerOptionSelected]}
                       onPress={() => setTempNotifyMinutes(option.value)}
-                    >
-                      <Text style={[styles.pickerOptionText, isSelected && styles.pickerOptionTextSelected]}>
-                        {option.label}
-                      </Text>
-                    </TouchableOpacity>
+                      isSelected={isSelected}
+                      label={option.label}
+                    />
                   );
                 })}
               </ScrollView>
-              <TouchableOpacity
-                style={styles.pickerConfirm}
+              <AnimatedConfirmButton
                 onPress={() => {
                   setNotifyBeforeMinutes(tempNotifyMinutes);
                   setShowNotifyPicker(false);
                 }}
-              >
-                <Text style={styles.pickerConfirmText}>Confirm</Text>
-              </TouchableOpacity>
-            </View>
+                label="Confirm"
+              />
+            </Animated.View>
           </View>
         )}
 
@@ -786,10 +1040,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderRadius: 16,
     padding: 20,
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
+    // 3D shadow effect with cyan glow
+    shadowColor: '#00FFFF',
+    shadowOpacity: 0.1,
     shadowRadius: 12,
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+    // Cyan outline
+    borderWidth: 1.5,
+    borderColor: 'rgba(0, 255, 255, 0.1)',
+    // 3D bottom edge
+    borderBottomWidth: 2.5,
+    borderBottomColor: 'rgba(0, 200, 200, 0.15)',
   },
   dateTimeHeader: {
     flexDirection: 'row',
@@ -813,10 +1075,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderRadius: 16,
     padding: 20,
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
+    // 3D shadow effect with cyan glow
+    shadowColor: '#00FFFF',
+    shadowOpacity: 0.1,
     shadowRadius: 12,
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+    // Cyan outline
+    borderWidth: 1.5,
+    borderColor: 'rgba(0, 255, 255, 0.1)',
+    borderBottomWidth: 2.5,
+    borderBottomColor: 'rgba(0, 200, 200, 0.15)',
   },
   notifyIconWrapper: {
     transform: [{ scale: 0.7 }],
@@ -832,10 +1101,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderRadius: 16,
     padding: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
+    // 3D shadow effect with cyan glow
+    shadowColor: '#00FFFF',
+    shadowOpacity: 0.1,
     shadowRadius: 12,
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+    // Cyan outline
+    borderWidth: 1.5,
+    borderColor: 'rgba(0, 255, 255, 0.1)',
+    borderBottomWidth: 2.5,
+    borderBottomColor: 'rgba(0, 200, 200, 0.15)',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -1155,6 +1431,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
+    // 3D effect with cyan glow
+    shadowColor: '#00FFFF',
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
+    // Cyan outline
+    borderWidth: 1.5,
+    borderColor: 'rgba(0, 255, 255, 0.3)',
+    borderBottomWidth: 3,
+    borderBottomColor: 'rgba(0, 200, 200, 0.4)',
   },
   saveButtonDisabled: {
     backgroundColor: '#a5a5a5',
@@ -1179,6 +1466,15 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     paddingTop: 16,
     maxHeight: '60%',
+    // 3D shadow effect
+    shadowColor: '#00FFFF',
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: -8 },
+    elevation: 10,
+    // Cyan outline at top
+    borderTopWidth: 2,
+    borderTopColor: 'rgba(0, 255, 255, 0.2)',
   },
   pickerHeader: {
     flexDirection: 'row',
@@ -1226,6 +1522,17 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: 16,
     alignItems: 'center',
+    // 3D effect with cyan glow
+    shadowColor: '#00FFFF',
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+    // Cyan outline
+    borderWidth: 1.5,
+    borderColor: 'rgba(0, 255, 255, 0.3)',
+    borderBottomWidth: 2.5,
+    borderBottomColor: 'rgba(0, 200, 200, 0.35)',
   },
   pickerConfirmText: {
     fontSize: 16,
