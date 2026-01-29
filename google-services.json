@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "670172364594",
+    "project_id": "synco-c7e95",
+    "storage_bucket": "synco-c7e95.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:670172364594:android:7106c1adf0a75061bf212b",
+        "android_client_info": {
+          "package_name": "com.synco.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDASGAnnGJ6Z4fNCEeHgwRgOYApvFcoWRI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

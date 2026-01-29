@@ -1,0 +1,9 @@
+{
+  "extends": "./node_modules/expo/tsconfig.base.json",
+  "compilerOptions": {
+    "strict": true,
+    "jsx": "react-native",
+    "types": ["react", "react-native"]
+  },
+  "exclude": ["supabase"]
+}
