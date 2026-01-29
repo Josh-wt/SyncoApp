@@ -1,4 +1,5 @@
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useRef } from 'react';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Reminder, ReminderStatus } from '../lib/types';
 
 export type { Reminder, ReminderStatus };
@@ -53,6 +54,53 @@ function getTimeStyle(status: ReminderStatus) {
 export default function TimelineItem({ reminder, onPress }: TimelineItemProps) {
   const { status, title, scheduled_time } = reminder;
 
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const translateXAnim = useRef(new Animated.Value(0)).current;
+  const glowAnim = useRef(new Animated.Value(0)).current;
+
+  const handlePressIn = () => {
+    Animated.parallel([
+      Animated.spring(scaleAnim, {
+        toValue: 0.98,
+        useNativeDriver: true,
+        tension: 300,
+        friction: 10,
+      }),
+      Animated.timing(translateXAnim, {
+        toValue: 4,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(glowAnim, {
+        toValue: 1,
+        duration: 150,
+        useNativeDriver: false,
+      }),
+    ]).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.parallel([
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        useNativeDriver: true,
+        tension: 300,
+        friction: 10,
+      }),
+      Animated.spring(translateXAnim, {
+        toValue: 0,
+        useNativeDriver: true,
+        tension: 300,
+        friction: 10,
+      }),
+      Animated.timing(glowAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: false,
+      }),
+    ]).start();
+  };
+
   const renderBubble = () => {
     switch (status) {
       case 'current':
@@ -95,18 +143,33 @@ export default function TimelineItem({ reminder, onPress }: TimelineItemProps) {
     }
   };
 
+  const animatedBorderColor = glowAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['rgba(0, 255, 255, 0)', 'rgba(0, 255, 255, 0.3)'],
+  });
+
   return (
-    <TouchableOpacity
-      style={[styles.timelineItem, status === 'placeholder' && styles.timelineItemDone]}
-      activeOpacity={0.8}
+    <Pressable
       onPress={() => onPress?.(reminder)}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
     >
-      <View style={getDotStyle(status)} />
-      <View style={styles.timelineRow}>
-        <Text style={getTimeStyle(status)}>{formatTime(scheduled_time)}</Text>
-        {renderBubble()}
-      </View>
-    </TouchableOpacity>
+      <Animated.View
+        style={[
+          styles.timelineItem,
+          status === 'placeholder' && styles.timelineItemDone,
+          {
+            transform: [{ scale: scaleAnim }, { translateX: translateXAnim }],
+          },
+        ]}
+      >
+        <View style={getDotStyle(status)} />
+        <Animated.View style={[styles.timelineRow, { borderColor: animatedBorderColor }]}>
+          <Text style={getTimeStyle(status)}>{formatTime(scheduled_time)}</Text>
+          {renderBubble()}
+        </Animated.View>
+      </Animated.View>
+    </Pressable>
   );
 }
 
@@ -201,20 +264,31 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     paddingHorizontal: 20,
     backgroundColor: '#ffffff',
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
+    // 3D shadow effect with cyan glow
+    shadowColor: '#00FFFF',
+    shadowOpacity: 0.1,
     shadowRadius: 12,
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
     alignItems: 'center',
     justifyContent: 'center',
+    // Cyan outline
+    borderWidth: 1,
+    borderColor: 'rgba(0, 255, 255, 0.12)',
+    // 3D bottom edge
+    borderBottomWidth: 2,
+    borderBottomColor: 'rgba(0, 200, 200, 0.15)',
   },
   bubblePrimary: {
     borderRadius: 32,
   },
   bubbleCurrent: {
     backgroundColor: '#2F00FF',
-    shadowColor: '#2F00FF',
-    shadowOpacity: 0.25,
+    shadowColor: '#00FFFF',
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    borderColor: 'rgba(0, 255, 255, 0.4)',
+    borderBottomColor: 'rgba(0, 200, 200, 0.4)',
   },
   bubbleLunch: {
     backgroundColor: 'rgba(255,255,255,0.8)',

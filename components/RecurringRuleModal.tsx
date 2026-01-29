@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
+  Animated,
   Modal,
+  Pressable,
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import {
@@ -18,6 +19,116 @@ import {
   FrequencyUnit,
   RecurringRule,
 } from '../lib/types';
+
+// Animated Button Component for RecurringRuleModal
+function AnimatedModalButton({
+  onPress,
+  style,
+  children,
+  variant = 'primary',
+}: {
+  onPress: () => void;
+  style?: object;
+  children: React.ReactNode;
+  variant?: 'primary' | 'secondary' | 'close';
+}) {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const translateYAnim = useRef(new Animated.Value(0)).current;
+
+  const handlePressIn = () => {
+    Animated.parallel([
+      Animated.spring(scaleAnim, {
+        toValue: 0.97,
+        useNativeDriver: true,
+        tension: 300,
+        friction: 10,
+      }),
+      Animated.timing(translateYAnim, {
+        toValue: variant === 'close' ? 0 : 2,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.parallel([
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        useNativeDriver: true,
+        tension: 300,
+        friction: 10,
+      }),
+      Animated.spring(translateYAnim, {
+        toValue: 0,
+        useNativeDriver: true,
+        tension: 300,
+        friction: 10,
+      }),
+    ]).start();
+  };
+
+  return (
+    <Pressable onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
+      <Animated.View
+        style={[
+          style,
+          {
+            transform: [{ scale: scaleAnim }, { translateY: translateYAnim }],
+          },
+        ]}
+      >
+        {children}
+      </Animated.View>
+    </Pressable>
+  );
+}
+
+// Animated Picker Option Component
+function AnimatedPickerOption({
+  onPress,
+  isSelected,
+  children,
+  style,
+}: {
+  onPress: () => void;
+  isSelected: boolean;
+  children: React.ReactNode;
+  style?: object;
+}) {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 0.95,
+      useNativeDriver: true,
+      tension: 400,
+      friction: 10,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      tension: 400,
+      friction: 10,
+    }).start();
+  };
+
+  return (
+    <Pressable onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
+      <Animated.View
+        style={[
+          style,
+          { transform: [{ scale: scaleAnim }] },
+        ]}
+      >
+        {children}
+      </Animated.View>
+    </Pressable>
+  );
+}
 
 interface RecurringRuleModalProps {
   visible: boolean;
@@ -126,9 +237,9 @@ export default function RecurringRuleModal({
           {/* Header */}
           <View style={styles.header}>
             <Text style={styles.headerTitle}>Custom Schedule</Text>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+            <AnimatedModalButton onPress={onClose} style={styles.closeBtn} variant="close">
               <CloseIcon />
-            </TouchableOpacity>
+            </AnimatedModalButton>
           </View>
 
           {/* Main Natural Language Card */}
@@ -187,15 +298,11 @@ export default function RecurringRuleModal({
           </View>
 
           {/* Save Button */}
-          <TouchableOpacity
-            style={styles.saveButton}
-            onPress={handleSave}
-            activeOpacity={0.9}
-          >
+          <AnimatedModalButton onPress={handleSave} style={styles.saveButton}>
             <Text style={styles.saveButtonText}>
               {initialRule ? 'Update' : 'Done'}
             </Text>
-          </TouchableOpacity>
+          </AnimatedModalButton>
         </View>
 
         {/* Frequency Picker Modal */}
@@ -205,31 +312,27 @@ export default function RecurringRuleModal({
           animationType="fade"
           onRequestClose={closePicker}
         >
-          <TouchableOpacity
-            style={styles.pickerOverlay}
-            activeOpacity={1}
-            onPress={closePicker}
-          >
-            <View style={styles.pickerContainer}>
+          <Pressable style={styles.pickerOverlay} onPress={closePicker}>
+            <Pressable style={styles.pickerContainer} onPress={e => e.stopPropagation()}>
               <View style={styles.pickerHeader}>
                 <Text style={styles.pickerTitle}>Select Frequency</Text>
-                <TouchableOpacity onPress={closePicker} style={styles.pickerCloseBtn}>
+                <AnimatedModalButton onPress={closePicker} style={styles.pickerCloseBtn} variant="close">
                   <CloseIcon />
-                </TouchableOpacity>
+                </AnimatedModalButton>
               </View>
               <View style={styles.pickerGrid}>
                 {FREQUENCY_OPTIONS.map(num => (
-                  <TouchableOpacity
+                  <AnimatedPickerOption
                     key={num}
-                    style={[
-                      styles.pickerOption,
-                      frequency === num && styles.pickerOptionSelected,
-                    ]}
                     onPress={() => {
                       setFrequency(num);
                       closePicker();
                     }}
-                    activeOpacity={0.7}
+                    isSelected={frequency === num}
+                    style={[
+                      styles.pickerOption,
+                      frequency === num && styles.pickerOptionSelected,
+                    ]}
                   >
                     <Text
                       style={[
@@ -244,11 +347,11 @@ export default function RecurringRuleModal({
                         <CheckCircleIcon color="#ffffff" />
                       </View>
                     )}
-                  </TouchableOpacity>
+                  </AnimatedPickerOption>
                 ))}
               </View>
-            </View>
-          </TouchableOpacity>
+            </Pressable>
+          </Pressable>
         </Modal>
 
         {/* Unit Picker Modal */}
@@ -258,31 +361,27 @@ export default function RecurringRuleModal({
           animationType="fade"
           onRequestClose={closePicker}
         >
-          <TouchableOpacity
-            style={styles.pickerOverlay}
-            activeOpacity={1}
-            onPress={closePicker}
-          >
-            <View style={styles.pickerContainer}>
+          <Pressable style={styles.pickerOverlay} onPress={closePicker}>
+            <Pressable style={styles.pickerContainer} onPress={e => e.stopPropagation()}>
               <View style={styles.pickerHeader}>
                 <Text style={styles.pickerTitle}>Select Time Unit</Text>
-                <TouchableOpacity onPress={closePicker} style={styles.pickerCloseBtn}>
+                <AnimatedModalButton onPress={closePicker} style={styles.pickerCloseBtn} variant="close">
                   <CloseIcon />
-                </TouchableOpacity>
+                </AnimatedModalButton>
               </View>
               <View style={styles.pickerList}>
                 {FREQUENCY_UNITS.map(unit => (
-                  <TouchableOpacity
+                  <AnimatedPickerOption
                     key={unit.value}
-                    style={[
-                      styles.pickerListItem,
-                      frequencyUnit === unit.value && styles.pickerListItemSelected,
-                    ]}
                     onPress={() => {
                       setFrequencyUnit(unit.value);
                       closePicker();
                     }}
-                    activeOpacity={0.7}
+                    isSelected={frequencyUnit === unit.value}
+                    style={[
+                      styles.pickerListItem,
+                      frequencyUnit === unit.value && styles.pickerListItemSelected,
+                    ]}
                   >
                     <Text
                       style={[
@@ -295,11 +394,11 @@ export default function RecurringRuleModal({
                     {frequencyUnit === unit.value && (
                       <CheckCircleIcon color="#2F00FF" />
                     )}
-                  </TouchableOpacity>
+                  </AnimatedPickerOption>
                 ))}
               </View>
-            </View>
-          </TouchableOpacity>
+            </Pressable>
+          </Pressable>
         </Modal>
 
         {/* Days Picker Modal */}
@@ -309,31 +408,27 @@ export default function RecurringRuleModal({
           animationType="fade"
           onRequestClose={closePicker}
         >
-          <TouchableOpacity
-            style={styles.pickerOverlay}
-            activeOpacity={1}
-            onPress={closePicker}
-          >
-            <View style={[styles.pickerContainer, styles.pickerContainerWide]}>
+          <Pressable style={styles.pickerOverlay} onPress={closePicker}>
+            <Pressable style={[styles.pickerContainer, styles.pickerContainerWide]} onPress={e => e.stopPropagation()}>
               <View style={styles.pickerHeader}>
                 <Text style={styles.pickerTitle}>Select Days</Text>
-                <TouchableOpacity onPress={closePicker} style={styles.pickerCloseBtn}>
+                <AnimatedModalButton onPress={closePicker} style={styles.pickerCloseBtn} variant="close">
                   <CloseIcon />
-                </TouchableOpacity>
+                </AnimatedModalButton>
               </View>
               <Text style={styles.pickerSubtitle}>
                 Choose which days of the week
               </Text>
               <View style={styles.daysGrid}>
                 {DAYS_OF_WEEK.map(day => (
-                  <TouchableOpacity
+                  <AnimatedPickerOption
                     key={day.value}
+                    onPress={() => toggleDay(day.value)}
+                    isSelected={selectedDays.includes(day.value)}
                     style={[
                       styles.dayChip,
                       selectedDays.includes(day.value) && styles.dayChipSelected,
                     ]}
-                    onPress={() => toggleDay(day.value)}
-                    activeOpacity={0.7}
                   >
                     <Text
                       style={[
@@ -343,18 +438,14 @@ export default function RecurringRuleModal({
                     >
                       {day.label}
                     </Text>
-                  </TouchableOpacity>
+                  </AnimatedPickerOption>
                 ))}
               </View>
-              <TouchableOpacity
-                style={styles.daysConfirmBtn}
-                onPress={closePicker}
-                activeOpacity={0.9}
-              >
+              <AnimatedModalButton onPress={closePicker} style={styles.daysConfirmBtn}>
                 <Text style={styles.daysConfirmText}>Done</Text>
-              </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
+              </AnimatedModalButton>
+            </Pressable>
+          </Pressable>
         </Modal>
       </View>
     </Modal>
@@ -485,11 +576,18 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: 14,
     alignItems: 'center',
-    shadowColor: '#2F00FF',
+    // 3D effect with cyan glow
+    shadowColor: '#00FFFF',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.35,
     shadowRadius: 16,
     elevation: 8,
+    // Cyan outline
+    borderWidth: 1.5,
+    borderColor: 'rgba(0, 255, 255, 0.3)',
+    // 3D bottom edge
+    borderBottomWidth: 3,
+    borderBottomColor: 'rgba(0, 200, 200, 0.4)',
   },
   saveButtonText: {
     fontSize: 15,
@@ -511,11 +609,15 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 320,
     padding: 20,
-    shadowColor: '#000',
+    // 3D shadow effect
+    shadowColor: '#00FFFF',
     shadowOffset: { width: 0, height: 20 },
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.2,
     shadowRadius: 40,
     elevation: 20,
+    // Cyan outline
+    borderWidth: 1.5,
+    borderColor: 'rgba(0, 255, 255, 0.2)',
   },
   pickerContainerWide: {
     maxWidth: 360,
@@ -637,6 +739,17 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 12,
     alignItems: 'center',
+    // 3D effect with cyan glow
+    shadowColor: '#00FFFF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+    // Cyan outline
+    borderWidth: 1,
+    borderColor: 'rgba(0, 255, 255, 0.3)',
+    borderBottomWidth: 2,
+    borderBottomColor: 'rgba(0, 200, 200, 0.3)',
   },
   daysConfirmText: {
     fontSize: 14,

@@ -1,6 +1,92 @@
-import { Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useEffect, useRef } from 'react';
 import { SparklesIcon, PlusCircleIcon } from './icons';
+
+// Animated Option Card Component
+function AnimatedOptionCard({
+  onPress,
+  icon,
+  title,
+  description,
+  isManual = false,
+}: {
+  onPress: () => void;
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  isManual?: boolean;
+}) {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const translateYAnim = useRef(new Animated.Value(0)).current;
+  const glowAnim = useRef(new Animated.Value(0)).current;
+
+  const handlePressIn = () => {
+    Animated.parallel([
+      Animated.spring(scaleAnim, {
+        toValue: 0.97,
+        useNativeDriver: true,
+        tension: 300,
+        friction: 10,
+      }),
+      Animated.timing(translateYAnim, {
+        toValue: 2,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(glowAnim, {
+        toValue: 1,
+        duration: 150,
+        useNativeDriver: false,
+      }),
+    ]).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.parallel([
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        useNativeDriver: true,
+        tension: 300,
+        friction: 10,
+      }),
+      Animated.spring(translateYAnim, {
+        toValue: 0,
+        useNativeDriver: true,
+        tension: 300,
+        friction: 10,
+      }),
+      Animated.timing(glowAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: false,
+      }),
+    ]).start();
+  };
+
+  const animatedBorderColor = glowAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['rgba(0, 255, 255, 0)', 'rgba(0, 255, 255, 0.4)'],
+  });
+
+  return (
+    <Pressable onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
+      <Animated.View
+        style={[
+          styles.optionCard,
+          isManual && styles.manualCard,
+          {
+            transform: [{ scale: scaleAnim }, { translateY: translateYAnim }],
+            borderColor: animatedBorderColor,
+          },
+        ]}
+      >
+        <View style={styles.iconContainer}>{icon}</View>
+        <Text style={styles.optionTitle}>{title}</Text>
+        <Text style={styles.optionDescription}>{description}</Text>
+      </Animated.View>
+    </Pressable>
+  );
+}
 
 export type CreationMode = 'ai' | 'manual';
 
@@ -49,31 +135,22 @@ export default function CreateReminderModal({ visible, onSelectMode, onClose }: 
 
   return (
     <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
-      <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose} />
+      <Pressable style={styles.backdrop} onPress={onClose} />
       <Animated.View style={[styles.content, { transform: [{ translateY: slideAnim }] }]}>
-        <TouchableOpacity
-          style={styles.optionCard}
-          activeOpacity={0.9}
+        <AnimatedOptionCard
           onPress={() => onSelectMode('ai')}
-        >
-          <View style={styles.iconContainer}>
-            <SparklesIcon />
-          </View>
-          <Text style={styles.optionTitle}>Create with AI</Text>
-          <Text style={styles.optionDescription}>Describe your day naturally</Text>
-        </TouchableOpacity>
+          icon={<SparklesIcon />}
+          title="Create with AI"
+          description="Describe your day naturally"
+        />
 
-        <TouchableOpacity
-          style={[styles.optionCard, styles.manualCard]}
-          activeOpacity={0.9}
+        <AnimatedOptionCard
           onPress={() => onSelectMode('manual')}
-        >
-          <View style={styles.iconContainerManual}>
-            <PlusCircleIcon />
-          </View>
-          <Text style={styles.optionTitle}>Create manually</Text>
-          <Text style={styles.optionDescription}>Traditional reminder input</Text>
-        </TouchableOpacity>
+          icon={<PlusCircleIcon />}
+          title="Create manually"
+          description="Traditional reminder input"
+          isManual
+        />
       </Animated.View>
     </Animated.View>
   );
@@ -100,10 +177,18 @@ const styles = StyleSheet.create({
     paddingVertical: 32,
     paddingHorizontal: 24,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
+    // 3D shadow effect
+    shadowColor: '#00FFFF',
+    shadowOpacity: 0.15,
     shadowRadius: 16,
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
+    // Cyan outline
+    borderWidth: 1.5,
+    borderColor: 'rgba(0, 255, 255, 0.2)',
+    // 3D bottom edge
+    borderBottomWidth: 3,
+    borderBottomColor: 'rgba(0, 200, 200, 0.25)',
   },
   manualCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.9)',

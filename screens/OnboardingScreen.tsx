@@ -1,5 +1,5 @@
-import { useCallback, useState } from 'react';
-import { Alert, Image, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native';
+import { useCallback, useState, useRef } from 'react';
+import { Alert, Animated, Image, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { signInWithGoogle, signInWithApple } from '../lib/auth';
@@ -42,6 +42,129 @@ interface OnboardingScreenProps {
   onSkip?: () => void;
 }
 
+// Animated Sign-In Button Component
+function AnimatedSignInButton({
+  onPress,
+  disabled,
+  icon,
+  label
+}: {
+  onPress: () => void;
+  disabled: boolean;
+  icon: React.ReactNode;
+  label: string;
+}) {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const translateYAnim = useRef(new Animated.Value(0)).current;
+  const glowAnim = useRef(new Animated.Value(0)).current;
+
+  const handlePressIn = () => {
+    Animated.parallel([
+      Animated.spring(scaleAnim, {
+        toValue: 0.97,
+        useNativeDriver: true,
+        tension: 300,
+        friction: 10,
+      }),
+      Animated.timing(translateYAnim, {
+        toValue: 2,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(glowAnim, {
+        toValue: 1,
+        duration: 150,
+        useNativeDriver: false,
+      }),
+    ]).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.parallel([
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        useNativeDriver: true,
+        tension: 300,
+        friction: 10,
+      }),
+      Animated.spring(translateYAnim, {
+        toValue: 0,
+        useNativeDriver: true,
+        tension: 300,
+        friction: 10,
+      }),
+      Animated.timing(glowAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: false,
+      }),
+    ]).start();
+  };
+
+  const animatedShadowOpacity = glowAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.1, 0.25],
+  });
+
+  return (
+    <Pressable
+      onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      disabled={disabled}
+    >
+      <Animated.View
+        style={[
+          styles.signInButton,
+          {
+            transform: [
+              { scale: scaleAnim },
+              { translateY: translateYAnim },
+            ],
+          },
+          disabled && styles.buttonDisabled,
+        ]}
+      >
+        <View style={styles.buttonContent}>
+          {icon}
+          <Text style={styles.signInText}>{label}</Text>
+        </View>
+      </Animated.View>
+    </Pressable>
+  );
+}
+
+// Animated Skip Button Component
+function AnimatedSkipButton({ onPress }: { onPress?: () => void }) {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 0.95,
+      useNativeDriver: true,
+      tension: 300,
+      friction: 10,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      tension: 300,
+      friction: 10,
+    }).start();
+  };
+
+  return (
+    <Pressable onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
+      <Animated.View style={[styles.skipButtonInner, { transform: [{ scale: scaleAnim }] }]}>
+        <Text style={styles.skipText}>Skip</Text>
+      </Animated.View>
+    </Pressable>
+  );
+}
+
 export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
@@ -74,9 +197,9 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
         </View>
       </View>
 
-      <TouchableOpacity style={[styles.skipButton, { top: insets.top + 16 }]} activeOpacity={0.7} onPress={onSkip}>
-        <Text style={styles.skipText}>Skip</Text>
-      </TouchableOpacity>
+      <View style={[styles.skipButton, { top: insets.top + 16 }]}>
+        <AnimatedSkipButton onPress={onSkip} />
+      </View>
 
       <Image
         source={{ uri: 'https://r2-pub.rork.com/attachments/tafj3o0rhg6tb0wzx829x' }}
@@ -128,28 +251,18 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
         <Text style={styles.getStartedText} numberOfLines={1}>
           Get Started With <Text style={styles.syncoText}>Synco</Text>
         </Text>
-        <TouchableOpacity
-          style={styles.signInButton}
-          activeOpacity={0.8}
+        <AnimatedSignInButton
           onPress={() => void handleOAuthSignIn('google')}
           disabled={isLoading}
-        >
-          <View style={styles.buttonContent}>
-            <GoogleIcon />
-            <Text style={styles.signInText}>Sign in with Google</Text>
-          </View>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.signInButton}
-          activeOpacity={0.8}
+          icon={<GoogleIcon />}
+          label="Sign in with Google"
+        />
+        <AnimatedSignInButton
           onPress={() => void handleOAuthSignIn('apple')}
           disabled={isLoading}
-        >
-          <View style={styles.buttonContent}>
-            <AppleIcon />
-            <Text style={styles.signInText}>Sign in with Apple</Text>
-          </View>
-        </TouchableOpacity>
+          icon={<AppleIcon />}
+          label="Sign in with Apple"
+        />
       </View>
     </View>
   );
@@ -224,11 +337,29 @@ const styles = StyleSheet.create({
     fontFamily: 'DMSans-Bold',
   },
   signInButton: {
-    backgroundColor: '#ffffffff',
+    backgroundColor: '#ffffff',
     paddingVertical: 14,
     borderRadius: 50,
     alignItems: 'center',
     justifyContent: 'center',
+    // 3D effect with cyan outline
+    borderWidth: 1.5,
+    borderColor: 'rgba(0, 255, 255, 0.35)',
+    shadowColor: '#00FFFF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+    // Bottom shadow for 3D depth
+    borderBottomWidth: 3,
+    borderBottomColor: 'rgba(0, 200, 200, 0.3)',
+  },
+  buttonDisabled: {
+    opacity: 0.6,
+  },
+  skipButtonInner: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
   },
   signInText: {
     color: '#000000',
