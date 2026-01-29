@@ -1,4 +1,5 @@
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useRef } from 'react';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 
 export type CardType = 'priority' | 'upcoming';
@@ -12,12 +13,75 @@ interface SummaryCardProps {
 export default function SummaryCard({ type, value, onPress }: SummaryCardProps) {
   const isPriority = type === 'priority';
 
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const translateYAnim = useRef(new Animated.Value(0)).current;
+  const glowAnim = useRef(new Animated.Value(0)).current;
+
+  const handlePressIn = () => {
+    Animated.parallel([
+      Animated.spring(scaleAnim, {
+        toValue: 0.97,
+        useNativeDriver: true,
+        tension: 300,
+        friction: 10,
+      }),
+      Animated.timing(translateYAnim, {
+        toValue: 2,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(glowAnim, {
+        toValue: 1,
+        duration: 150,
+        useNativeDriver: false,
+      }),
+    ]).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.parallel([
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        useNativeDriver: true,
+        tension: 300,
+        friction: 10,
+      }),
+      Animated.spring(translateYAnim, {
+        toValue: 0,
+        useNativeDriver: true,
+        tension: 300,
+        friction: 10,
+      }),
+      Animated.timing(glowAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: false,
+      }),
+    ]).start();
+  };
+
+  const animatedBorderColor = glowAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['rgba(0, 255, 255, 0.15)', 'rgba(0, 255, 255, 0.5)'],
+  });
+
   return (
-    <TouchableOpacity
-      activeOpacity={0.9}
-      style={[styles.summaryCard, isPriority && styles.priorityCard]}
+    <Pressable
       onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      style={styles.pressable}
     >
+      <Animated.View
+        style={[
+          styles.summaryCard,
+          isPriority && styles.priorityCard,
+          {
+            transform: [{ scale: scaleAnim }, { translateY: translateYAnim }],
+            borderColor: animatedBorderColor,
+          },
+        ]}
+      >
       <View style={styles.cardTop}>
         <Text style={styles.cardLabel}>{isPriority ? 'Priority' : 'Upcoming'}</Text>
         {isPriority ? (
@@ -32,11 +96,15 @@ export default function SummaryCard({ type, value, onPress }: SummaryCardProps) 
           {isPriority ? 'Due Today' : 'THIS WEEK'}
         </Text>
       </View>
-    </TouchableOpacity>
+      </Animated.View>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
+  pressable: {
+    flex: 1,
+  },
   summaryCard: {
     flex: 1,
     backgroundColor: '#ffffff',
@@ -44,15 +112,23 @@ const styles = StyleSheet.create({
     padding: 24,
     minHeight: 160,
     justifyContent: 'space-between',
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 2 },
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.6)',
+    // 3D shadow effect with cyan glow
+    shadowColor: '#00FFFF',
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
+    // Cyan outline
+    borderWidth: 1.5,
+    borderColor: 'rgba(0, 255, 255, 0.15)',
+    // 3D bottom edge
+    borderBottomWidth: 3,
+    borderBottomColor: 'rgba(0, 200, 200, 0.2)',
   },
   priorityCard: {
-    borderColor: 'rgba(255,255,255,0.9)',
+    borderColor: 'rgba(0, 255, 255, 0.25)',
+    shadowColor: '#00FFFF',
+    shadowOpacity: 0.18,
   },
   cardTop: {
     flexDirection: 'row',
