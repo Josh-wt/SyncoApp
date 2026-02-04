@@ -40,7 +40,8 @@
         {
           "color": "#2F00FF"
         }
-      ]
+      ],
+      "expo-build-properties"
     ],
     "extra": {
       "eas": {

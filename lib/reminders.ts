@@ -11,6 +11,31 @@ export async function getReminders(): Promise<Reminder[]> {
   return data ?? [];
 }
 
+export async function getAllFutureReminders(): Promise<Reminder[]> {
+  const today = new Date();
+  const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
+
+  const { data, error } = await supabase
+    .from('reminders')
+    .select('*')
+    .gte('scheduled_time', startOfDay)
+    .order('scheduled_time', { ascending: true });
+
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function getNotifiedReminders(): Promise<Reminder[]> {
+  const { data, error } = await supabase
+    .from('reminders')
+    .select('*')
+    .not('notified_at', 'is', null)
+    .order('notified_at', { ascending: false });
+
+  if (error) throw error;
+  return data ?? [];
+}
+
 export async function getTodayReminders(): Promise<Reminder[]> {
   const today = new Date();
   const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
@@ -158,4 +183,36 @@ export async function createRecurringRule(input: CreateRecurringRuleInput): Prom
 export async function deleteRecurringRule(id: string): Promise<void> {
   const { error } = await supabase.from('recurring_rules').delete().eq('id', id);
   if (error) throw error;
+}
+
+// Snooze a reminder by specified minutes
+export async function snoozeReminder(id: string, minutes: number): Promise<Reminder> {
+  // Get the current reminder
+  const { data: reminder, error: fetchError } = await supabase
+    .from('reminders')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (fetchError) throw fetchError;
+
+  // Calculate new scheduled time
+  const currentScheduledTime = new Date(reminder.scheduled_time);
+  const newScheduledTime = new Date(currentScheduledTime.getTime() + minutes * 60 * 1000);
+
+  // Update the reminder with new scheduled time and reset notification fields
+  const { data, error } = await supabase
+    .from('reminders')
+    .update({
+      scheduled_time: newScheduledTime.toISOString(),
+      notified_at: null,
+      priority_notified_at: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
 }

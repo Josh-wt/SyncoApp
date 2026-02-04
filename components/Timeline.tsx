@@ -16,7 +16,7 @@ export default function Timeline({ reminders, onReminderPress, onViewAllPress }:
   return (
     <>
       <View style={styles.timelineHeader}>
-        <Text style={styles.timelineTitle}>Today&apos;s Timeline</Text>
+        <Text style={styles.timelineTitle}>Upcoming</Text>
         <TouchableOpacity onPress={onViewAllPress}>
           <Text style={styles.timelineAction}>View all</Text>
         </TouchableOpacity>
@@ -45,14 +45,14 @@ const styles = StyleSheet.create({
   },
   timelineTitle: {
     fontSize: 12,
-    fontFamily: 'DMSans-Bold',
+    fontFamily: 'BricolageGrotesque-Bold',
     color: '#888888',
     letterSpacing: 1.4,
     textTransform: 'uppercase',
   },
   timelineAction: {
     fontSize: 12,
-    fontFamily: 'DMSans-Bold',
+    fontFamily: 'BricolageGrotesque-Bold',
     color: '#2F00FF',
   },
   timelineWrap: {

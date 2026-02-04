@@ -18,7 +18,6 @@ function AnimatedOptionCard({
 }) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const translateYAnim = useRef(new Animated.Value(0)).current;
-  const glowAnim = useRef(new Animated.Value(0)).current;
 
   const handlePressIn = () => {
     Animated.parallel([
@@ -32,11 +31,6 @@ function AnimatedOptionCard({
         toValue: 2,
         duration: 100,
         useNativeDriver: true,
-      }),
-      Animated.timing(glowAnim, {
-        toValue: 1,
-        duration: 150,
-        useNativeDriver: false,
       }),
     ]).start();
   };
@@ -55,18 +49,8 @@ function AnimatedOptionCard({
         tension: 300,
         friction: 10,
       }),
-      Animated.timing(glowAnim, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: false,
-      }),
     ]).start();
   };
-
-  const animatedBorderColor = glowAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['rgba(0, 255, 255, 0)', 'rgba(0, 255, 255, 0.4)'],
-  });
 
   return (
     <Pressable onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
@@ -76,7 +60,6 @@ function AnimatedOptionCard({
           isManual && styles.manualCard,
           {
             transform: [{ scale: scaleAnim }, { translateY: translateYAnim }],
-            borderColor: animatedBorderColor,
           },
         ]}
       >
@@ -177,18 +160,6 @@ const styles = StyleSheet.create({
     paddingVertical: 32,
     paddingHorizontal: 24,
     alignItems: 'center',
-    // 3D shadow effect
-    shadowColor: '#00FFFF',
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 8,
-    // Cyan outline
-    borderWidth: 1.5,
-    borderColor: 'rgba(0, 255, 255, 0.2)',
-    // 3D bottom edge
-    borderBottomWidth: 3,
-    borderBottomColor: 'rgba(0, 200, 200, 0.25)',
   },
   manualCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.9)',
@@ -201,13 +172,13 @@ const styles = StyleSheet.create({
   },
   optionTitle: {
     fontSize: 22,
-    fontFamily: 'DMSans-Bold',
+    fontFamily: 'BricolageGrotesque-Bold',
     color: '#161117',
     marginBottom: 8,
   },
   optionDescription: {
     fontSize: 14,
-    fontFamily: 'DMSans-Regular',
+    fontFamily: 'BricolageGrotesque-Regular',
     color: '#9CA3AF',
   },
 });

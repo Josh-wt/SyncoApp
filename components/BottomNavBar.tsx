@@ -3,78 +3,40 @@ import { useEffect, useRef, useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { ClipPath, Defs, Path, Rect } from 'react-native-svg';
 import { MaterialIcons } from '@expo/vector-icons';
-import { AddButtonIcon, CalendarIcon, CloseButtonIcon, NotificationIcon } from './icons';
-import CreateReminderModal, { CreationMode } from './CreateReminderModal';
+import { AddButtonIcon, BellNavIcon, TimelineNavIcon, AccountSettingsIcon } from './icons';
+import { CreationMode } from './CreateReminderModal';
 
 // Animated FAB Component
-function AnimatedFAB({
-  isOpen,
-  onPress,
-}: {
-  isOpen: boolean;
-  onPress: () => void;
-}) {
+function AnimatedFAB({ onPress }: { onPress: () => void }) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
-  const rotateAnim = useRef(new Animated.Value(0)).current;
-  const glowAnim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.spring(rotateAnim, {
-      toValue: isOpen ? 1 : 0,
-      useNativeDriver: true,
-      tension: 300,
-      friction: 10,
-    }).start();
-  }, [isOpen, rotateAnim]);
 
   const handlePressIn = () => {
-    Animated.parallel([
-      Animated.spring(scaleAnim, {
-        toValue: 0.9,
-        useNativeDriver: true,
-        tension: 400,
-        friction: 10,
-      }),
-      Animated.timing(glowAnim, {
-        toValue: 1,
-        duration: 150,
-        useNativeDriver: false,
-      }),
-    ]).start();
+    Animated.spring(scaleAnim, {
+      toValue: 0.9,
+      useNativeDriver: true,
+      tension: 400,
+      friction: 10,
+    }).start();
   };
 
   const handlePressOut = () => {
-    Animated.parallel([
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        useNativeDriver: true,
-        tension: 400,
-        friction: 10,
-      }),
-      Animated.timing(glowAnim, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: false,
-      }),
-    ]).start();
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      tension: 400,
+      friction: 10,
+    }).start();
   };
-
-  const rotation = rotateAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '45deg'],
-  });
 
   return (
     <Pressable onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
       <Animated.View
         style={[
           styles.fabContainer,
-          {
-            transform: [{ scale: scaleAnim }, { rotate: rotation }],
-          },
+          { transform: [{ scale: scaleAnim }] },
         ]}
       >
-        {isOpen ? <CloseButtonIcon /> : <AddButtonIcon />}
+        <AddButtonIcon />
       </Animated.View>
     </Pressable>
   );
@@ -143,7 +105,6 @@ export default function BottomNavBar({
   onDismissHint,
 }: BottomNavBarProps) {
   const insets = useSafeAreaInsets();
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [showHint, setShowHint] = useState(showFirstTimeHint);
 
   const hintOpacity = useRef(new Animated.Value(0)).current;
@@ -198,27 +159,12 @@ export default function BottomNavBar({
       setShowHint(false);
       onDismissHint?.();
     }
-    setIsModalOpen(!isModalOpen);
-  };
-
-  const handleSelectMode = (mode: CreationMode) => {
-    setIsModalOpen(false);
-    onCreateReminder?.(mode);
-  };
-
-  const handleCloseModal = () => {
-    setIsModalOpen(false);
+    onCreateReminder?.('manual');
   };
 
   return (
     <>
-      <CreateReminderModal
-        visible={isModalOpen}
-        onSelectMode={handleSelectMode}
-        onClose={handleCloseModal}
-      />
-
-      {showHint && !isModalOpen && (
+      {showHint && (
         <Animated.View
           style={[
             styles.hintContainer,
@@ -256,26 +202,22 @@ export default function BottomNavBar({
                 />
               </AnimatedNavIcon>
               <AnimatedNavIcon onPress={() => onTabPress?.('calendar')} isActive={activeTab === 'calendar'}>
-                <CalendarIcon />
+                <TimelineNavIcon color={activeTab === 'calendar' ? '#2F00FF' : '#d1d5db'} />
               </AnimatedNavIcon>
             </View>
             <View style={styles.navGroup}>
               <AnimatedNavIcon onPress={() => onTabPress?.('notifications')} isActive={activeTab === 'notifications'}>
-                <NotificationIcon />
+                <BellNavIcon color={activeTab === 'notifications' ? '#2F00FF' : '#d1d5db'} />
               </AnimatedNavIcon>
               <AnimatedNavIcon onPress={() => onTabPress?.('settings')} isActive={activeTab === 'settings'}>
-                <MaterialIcons
-                  name="settings"
-                  size={26}
-                  color={activeTab === 'settings' ? '#2F00FF' : '#d1d5db'}
-                />
+                <AccountSettingsIcon color={activeTab === 'settings' ? '#2F00FF' : '#d1d5db'} />
               </AnimatedNavIcon>
             </View>
           </View>
         </View>
 
         <View style={styles.addButton}>
-          <AnimatedFAB isOpen={isModalOpen} onPress={handleAddPress} />
+          <AnimatedFAB onPress={handleAddPress} />
         </View>
       </View>
     </>
@@ -336,15 +278,7 @@ const styles = StyleSheet.create({
     height: 68,
     alignItems: 'center',
     justifyContent: 'center',
-    // 3D effect with cyan glow
     borderRadius: 34,
-    borderWidth: 2,
-    borderColor: 'rgba(0, 255, 255, 0.3)',
-    shadowColor: '#00FFFF',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 8,
   },
   addButton: {
     position: 'absolute',
@@ -378,7 +312,7 @@ const styles = StyleSheet.create({
   hintText: {
     color: '#ffffff',
     fontSize: 13,
-    fontFamily: 'DMSans-Bold',
+    fontFamily: 'BricolageGrotesque-Bold',
   },
   hintArrow: {
     width: 0,

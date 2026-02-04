@@ -227,9 +227,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
     position: 'relative',
-    // Cyan outline for 3D effect
-    borderWidth: 1.5,
-    borderColor: 'rgba(0, 255, 255, 0.3)',
   },
   bottomLayer: {
     position: 'absolute',
@@ -255,45 +252,28 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   baseText: {
-    fontFamily: 'DMSans-Bold',
+    fontFamily: 'BricolageGrotesque-Bold',
   },
 
   // Variants
   primaryContainer: {
     backgroundColor: '#2F00FF',
-    shadowColor: '#2F00FF',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    elevation: 8,
   },
   primaryText: {
     color: '#ffffff',
   },
-  primaryShadow: {
-    shadowColor: '#00FFFF',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-  },
+  primaryShadow: {},
 
   secondaryContainer: {
     backgroundColor: 'rgba(47, 0, 255, 0.1)',
-    borderColor: 'rgba(0, 255, 255, 0.4)',
   },
   secondaryText: {
     color: '#2F00FF',
   },
-  secondaryShadow: {
-    shadowColor: '#00FFFF',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-  },
+  secondaryShadow: {},
 
   ghostContainer: {
     backgroundColor: 'transparent',
-    borderColor: 'transparent',
   },
   ghostText: {
     color: '#888888',
@@ -301,22 +281,11 @@ const styles = StyleSheet.create({
 
   whiteContainer: {
     backgroundColor: '#ffffff',
-    borderColor: 'rgba(0, 255, 255, 0.25)',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 4,
   },
   whiteText: {
     color: '#000000',
   },
-  whiteShadow: {
-    shadowColor: '#00FFFF',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-  },
+  whiteShadow: {},
 
   // Sizes
   sizeSmall: {
@@ -348,7 +317,6 @@ const styles = StyleSheet.create({
   },
   disabledContainer: {
     backgroundColor: '#a5a5a5',
-    borderColor: 'rgba(128, 128, 128, 0.3)',
   },
   disabledText: {
     color: '#ffffff',

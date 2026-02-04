@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   createReminder,
   deleteReminder,
+  getAllFutureReminders,
   getPriorityCount,
   getTodayReminders,
   getUpcomingCount,
@@ -10,6 +11,7 @@ import {
 } from '../lib/reminders';
 import { CreateReminderInput, Reminder, UpdateReminderInput } from '../lib/types';
 import { supabase } from '../lib/supabase';
+import { sendResyncPush, syncLocalReminderSchedules } from '../lib/notifications';
 
 interface UseRemindersReturn {
   reminders: Reminder[];
@@ -35,16 +37,19 @@ export function useReminders(): UseRemindersReturn {
       setIsLoading(true);
       setError(null);
 
-      const [todayReminders, priority, upcoming] = await Promise.all([
-        getTodayReminders(),
+      const [upcomingReminders, priority, upcoming] = await Promise.all([
+        getAllFutureReminders(),
         getPriorityCount(),
         getUpcomingCount(),
       ]);
 
       // Process reminders to compute their status based on current time
-      const processedReminders = processRemindersStatus(todayReminders);
+      const processedReminders = processRemindersStatus(upcomingReminders);
 
-      setReminders(processedReminders);
+      // Limit to 7 upcoming reminders for the homepage
+      const limitedReminders = processedReminders.slice(0, 7);
+
+      setReminders(limitedReminders);
       setPriorityCount(priority);
       setUpcomingCount(upcoming);
     } catch (err) {
@@ -86,18 +91,24 @@ export function useReminders(): UseRemindersReturn {
   const addReminder = useCallback(async (input: CreateReminderInput): Promise<Reminder> => {
     const newReminder = await createReminder(input);
     await fetchData();
+    await syncLocalReminderSchedules();
+    await sendResyncPush();
     return newReminder;
   }, [fetchData]);
 
   const editReminder = useCallback(async (id: string, input: UpdateReminderInput): Promise<Reminder> => {
     const updated = await updateReminder(id, input);
     await fetchData();
+    await syncLocalReminderSchedules();
+    await sendResyncPush();
     return updated;
   }, [fetchData]);
 
   const removeReminder = useCallback(async (id: string): Promise<void> => {
     await deleteReminder(id);
     await fetchData();
+    await syncLocalReminderSchedules();
+    await sendResyncPush();
   }, [fetchData]);
 
   return {

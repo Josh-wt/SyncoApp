@@ -143,6 +143,8 @@ type ActivePicker = 'frequency' | 'unit' | 'days' | null;
 const FREQUENCY_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
 const FREQUENCY_UNITS: { label: string; singular: string; value: FrequencyUnit }[] = [
+  { label: 'minutes', singular: 'minute', value: 'minutes' },
+  { label: 'hours', singular: 'hour', value: 'hours' },
   { label: 'days', singular: 'day', value: 'days' },
   { label: 'weeks', singular: 'week', value: 'weeks' },
   { label: 'months', singular: 'month', value: 'months' },
@@ -206,6 +208,10 @@ export default function RecurringRuleModal({
   };
 
   const getGeneratedName = () => {
+    // For minutes and hours, don't include "Every", use more natural language
+    if (frequencyUnit === 'minutes' || frequencyUnit === 'hours') {
+      return `Every ${frequency} ${getUnitLabel()}`;
+    }
     return `Every ${frequency} ${getUnitLabel()}${frequencyUnit === 'weeks' ? ` on ${getDaysLabel()}` : ''}`;
   };
 
@@ -215,6 +221,7 @@ export default function RecurringRuleModal({
       name: ruleName.trim() || getGeneratedName(),
       frequency,
       frequency_unit: frequencyUnit,
+      // Only include selected_days for weekly recurring
       selected_days: frequencyUnit === 'weeks' ? selectedDays : [],
     };
     onSave(rule);
@@ -480,7 +487,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 16,
-    fontFamily: 'DMSans-Bold',
+    fontFamily: 'BricolageGrotesque-Bold',
     color: '#121018',
   },
   closeBtn: {
@@ -525,7 +532,7 @@ const styles = StyleSheet.create({
   },
   ruleText: {
     fontSize: 22,
-    fontFamily: 'DMSans-Medium',
+    fontFamily: 'BricolageGrotesque-Medium',
     color: '#121018',
     lineHeight: 34,
     letterSpacing: -0.3,
@@ -536,12 +543,12 @@ const styles = StyleSheet.create({
   },
   tokenActive: {
     color: '#2F00FF',
-    fontFamily: 'DMSans-Bold',
+    fontFamily: 'BricolageGrotesque-Bold',
     backgroundColor: 'rgba(47, 0, 255, 0.1)',
   },
   hintText: {
     fontSize: 12,
-    fontFamily: 'DMSans-Regular',
+    fontFamily: 'BricolageGrotesque-Regular',
     color: '#655e8d',
     marginTop: 16,
   },
@@ -552,7 +559,7 @@ const styles = StyleSheet.create({
   },
   nameInputLabel: {
     fontSize: 11,
-    fontFamily: 'DMSans-Medium',
+    fontFamily: 'BricolageGrotesque-Medium',
     color: 'rgba(18, 16, 24, 0.5)',
     marginBottom: 8,
     textTransform: 'uppercase',
@@ -564,7 +571,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     fontSize: 15,
-    fontFamily: 'DMSans-Medium',
+    fontFamily: 'BricolageGrotesque-Medium',
     color: '#121018',
     borderWidth: 1,
     borderColor: 'rgba(47, 0, 255, 0.08)',
@@ -576,22 +583,10 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: 14,
     alignItems: 'center',
-    // 3D effect with cyan glow
-    shadowColor: '#00FFFF',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 16,
-    elevation: 8,
-    // Cyan outline
-    borderWidth: 1.5,
-    borderColor: 'rgba(0, 255, 255, 0.3)',
-    // 3D bottom edge
-    borderBottomWidth: 3,
-    borderBottomColor: 'rgba(0, 200, 200, 0.4)',
   },
   saveButtonText: {
     fontSize: 15,
-    fontFamily: 'DMSans-Bold',
+    fontFamily: 'BricolageGrotesque-Bold',
     color: '#ffffff',
   },
 
@@ -609,15 +604,6 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 320,
     padding: 20,
-    // 3D shadow effect
-    shadowColor: '#00FFFF',
-    shadowOffset: { width: 0, height: 20 },
-    shadowOpacity: 0.2,
-    shadowRadius: 40,
-    elevation: 20,
-    // Cyan outline
-    borderWidth: 1.5,
-    borderColor: 'rgba(0, 255, 255, 0.2)',
   },
   pickerContainerWide: {
     maxWidth: 360,
@@ -630,7 +616,7 @@ const styles = StyleSheet.create({
   },
   pickerTitle: {
     fontSize: 16,
-    fontFamily: 'DMSans-Bold',
+    fontFamily: 'BricolageGrotesque-Bold',
     color: '#121018',
   },
   pickerCloseBtn: {
@@ -643,7 +629,7 @@ const styles = StyleSheet.create({
   },
   pickerSubtitle: {
     fontSize: 12,
-    fontFamily: 'DMSans-Regular',
+    fontFamily: 'BricolageGrotesque-Regular',
     color: '#655e8d',
     marginBottom: 16,
     marginTop: -6,
@@ -669,7 +655,7 @@ const styles = StyleSheet.create({
   },
   pickerOptionText: {
     fontSize: 16,
-    fontFamily: 'DMSans-Bold',
+    fontFamily: 'BricolageGrotesque-Bold',
     color: '#121018',
   },
   pickerOptionTextSelected: {
@@ -701,11 +687,11 @@ const styles = StyleSheet.create({
   },
   pickerListText: {
     fontSize: 15,
-    fontFamily: 'DMSans-Medium',
+    fontFamily: 'BricolageGrotesque-Medium',
     color: '#121018',
   },
   pickerListTextSelected: {
-    fontFamily: 'DMSans-Bold',
+    fontFamily: 'BricolageGrotesque-Bold',
     color: '#2F00FF',
   },
 
@@ -727,33 +713,22 @@ const styles = StyleSheet.create({
   },
   dayChipText: {
     fontSize: 13,
-    fontFamily: 'DMSans-Medium',
+    fontFamily: 'BricolageGrotesque-Medium',
     color: '#121018',
   },
   dayChipTextSelected: {
     color: '#ffffff',
-    fontFamily: 'DMSans-Bold',
+    fontFamily: 'BricolageGrotesque-Bold',
   },
   daysConfirmBtn: {
     backgroundColor: '#2F00FF',
     paddingVertical: 12,
     borderRadius: 12,
     alignItems: 'center',
-    // 3D effect with cyan glow
-    shadowColor: '#00FFFF',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-    // Cyan outline
-    borderWidth: 1,
-    borderColor: 'rgba(0, 255, 255, 0.3)',
-    borderBottomWidth: 2,
-    borderBottomColor: 'rgba(0, 200, 200, 0.3)',
   },
   daysConfirmText: {
     fontSize: 14,
-    fontFamily: 'DMSans-Bold',
+    fontFamily: 'BricolageGrotesque-Bold',
     color: '#ffffff',
   },
 });

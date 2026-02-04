@@ -146,19 +146,8 @@ const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(0, 255, 255, 0.2)',
-    // 3D shadow effect
-    shadowColor: '#00FFFF',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
   },
-  glow: {
-    shadowColor: '#00FFFF',
-    shadowOpacity: 0.4,
-  },
+  glow: {},
   disabled: {
     opacity: 0.5,
   },

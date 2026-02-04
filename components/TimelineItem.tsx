@@ -56,7 +56,6 @@ export default function TimelineItem({ reminder, onPress }: TimelineItemProps) {
 
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const translateXAnim = useRef(new Animated.Value(0)).current;
-  const glowAnim = useRef(new Animated.Value(0)).current;
 
   const handlePressIn = () => {
     Animated.parallel([
@@ -70,11 +69,6 @@ export default function TimelineItem({ reminder, onPress }: TimelineItemProps) {
         toValue: 4,
         duration: 100,
         useNativeDriver: true,
-      }),
-      Animated.timing(glowAnim, {
-        toValue: 1,
-        duration: 150,
-        useNativeDriver: false,
       }),
     ]).start();
   };
@@ -92,11 +86,6 @@ export default function TimelineItem({ reminder, onPress }: TimelineItemProps) {
         useNativeDriver: true,
         tension: 300,
         friction: 10,
-      }),
-      Animated.timing(glowAnim, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: false,
       }),
     ]).start();
   };
@@ -143,11 +132,6 @@ export default function TimelineItem({ reminder, onPress }: TimelineItemProps) {
     }
   };
 
-  const animatedBorderColor = glowAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['rgba(0, 255, 255, 0)', 'rgba(0, 255, 255, 0.3)'],
-  });
-
   return (
     <Pressable
       onPress={() => onPress?.(reminder)}
@@ -164,10 +148,10 @@ export default function TimelineItem({ reminder, onPress }: TimelineItemProps) {
         ]}
       >
         <View style={getDotStyle(status)} />
-        <Animated.View style={[styles.timelineRow, { borderColor: animatedBorderColor }]}>
+        <View style={styles.timelineRow}>
           <Text style={getTimeStyle(status)}>{formatTime(scheduled_time)}</Text>
           {renderBubble()}
-        </Animated.View>
+        </View>
       </Animated.View>
     </Pressable>
   );
@@ -243,19 +227,19 @@ const styles = StyleSheet.create({
   timelineTime: {
     width: 64,
     fontSize: 18,
-    fontFamily: 'DMSans-Bold',
+    fontFamily: 'BricolageGrotesque-Bold',
     color: '#2F00FF',
   },
   timelineTimeMuted: {
     width: 64,
     fontSize: 18,
-    fontFamily: 'DMSans-Bold',
+    fontFamily: 'BricolageGrotesque-Bold',
     color: 'rgba(47,0,255,0.6)',
   },
   timelineTimeDone: {
     width: 64,
     fontSize: 18,
-    fontFamily: 'DMSans-Bold',
+    fontFamily: 'BricolageGrotesque-Bold',
     color: 'rgba(136,136,136,0.6)',
   },
   timelineBubble: {
@@ -264,31 +248,14 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     paddingHorizontal: 20,
     backgroundColor: '#ffffff',
-    // 3D shadow effect with cyan glow
-    shadowColor: '#00FFFF',
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
     alignItems: 'center',
     justifyContent: 'center',
-    // Cyan outline
-    borderWidth: 1,
-    borderColor: 'rgba(0, 255, 255, 0.12)',
-    // 3D bottom edge
-    borderBottomWidth: 2,
-    borderBottomColor: 'rgba(0, 200, 200, 0.15)',
   },
   bubblePrimary: {
     borderRadius: 32,
   },
   bubbleCurrent: {
     backgroundColor: '#2F00FF',
-    shadowColor: '#00FFFF',
-    shadowOpacity: 0.35,
-    shadowRadius: 16,
-    borderColor: 'rgba(0, 255, 255, 0.4)',
-    borderBottomColor: 'rgba(0, 200, 200, 0.4)',
   },
   bubbleLunch: {
     backgroundColor: 'rgba(255,255,255,0.8)',
@@ -302,30 +269,30 @@ const styles = StyleSheet.create({
   },
   timelineBubbleTitle: {
     fontSize: 20,
-    fontFamily: 'DMSans-Bold',
+    fontFamily: 'BricolageGrotesque-Bold',
     color: '#161117',
   },
   currentLabel: {
     fontSize: 10,
     letterSpacing: 1.2,
     color: 'rgba(255,255,255,0.8)',
-    fontFamily: 'DMSans-Bold',
+    fontFamily: 'BricolageGrotesque-Bold',
     textTransform: 'uppercase',
     marginBottom: 4,
   },
   currentTitle: {
     fontSize: 20,
-    fontFamily: 'DMSans-Bold',
+    fontFamily: 'BricolageGrotesque-Bold',
     color: '#ffffff',
   },
   lunchTitle: {
     fontSize: 18,
-    fontFamily: 'DMSans-Regular',
+    fontFamily: 'BricolageGrotesque-Regular',
     color: '#161117',
   },
   reviewTitle: {
     fontSize: 18,
-    fontFamily: 'DMSans-Regular',
+    fontFamily: 'BricolageGrotesque-Regular',
     color: '#888888',
   },
   bubbleWrapUp: {
@@ -342,7 +309,7 @@ const styles = StyleSheet.create({
   },
   wrapTitle: {
     fontSize: 16,
-    fontFamily: 'DMSans-Regular',
+    fontFamily: 'BricolageGrotesque-Regular',
     color: '#888888',
   },
 });

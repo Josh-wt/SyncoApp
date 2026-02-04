@@ -40,6 +40,7 @@ export interface PushToken {
   user_id: string;
   token: string;
   device_id: string | null;
+  platform: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -52,7 +53,7 @@ export const NOTIFICATION_TIMING_OPTIONS = [
   { label: '1 hour before', value: 60 },
 ] as const;
 
-export type FrequencyUnit = 'days' | 'weeks' | 'months' | 'years';
+export type FrequencyUnit = 'minutes' | 'hours' | 'days' | 'weeks' | 'months' | 'years';
 
 export type DayOfWeek = 'sun' | 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat';
 
@@ -78,6 +79,30 @@ export interface CreateRecurringRuleInput {
 
 export type RecurringOption = 'none' | 'daily' | 'saved' | 'custom';
 
+// App notification types (in-app notifications, not push)
+export type NotificationCategory =
+  | 'reminder'
+  | 'project'
+  | 'sync'
+  | 'security'
+  | 'subscription'
+  | 'meeting'
+  | 'system';
+
+export interface AppNotification {
+  id: string;
+  category: NotificationCategory;
+  title: string;
+  description: string;
+  timestamp: Date;
+  isRead: boolean;
+  metadata?: {
+    reminderId?: string;
+    location?: string;
+    device?: string;
+  };
+}
+
 export const DAYS_OF_WEEK: { label: string; short: string; value: DayOfWeek }[] = [
   { label: 'Sunday', short: 'S', value: 'sun' },
   { label: 'Monday', short: 'M', value: 'mon' },
@@ -87,3 +112,18 @@ export const DAYS_OF_WEEK: { label: string; short: string; value: DayOfWeek }[] 
   { label: 'Friday', short: 'F', value: 'fri' },
   { label: 'Saturday', short: 'S', value: 'sat' },
 ];
+
+// User preferences types
+export type SnoozeMode = 'text_input' | 'presets';
+
+export interface UserPreferences {
+  id: string;
+  user_id: string;
+  snooze_mode: SnoozeMode;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UpdateUserPreferencesInput {
+  snooze_mode?: SnoozeMode;
+}

@@ -15,7 +15,6 @@ export default function SummaryCard({ type, value, onPress }: SummaryCardProps) 
 
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const translateYAnim = useRef(new Animated.Value(0)).current;
-  const glowAnim = useRef(new Animated.Value(0)).current;
 
   const handlePressIn = () => {
     Animated.parallel([
@@ -29,11 +28,6 @@ export default function SummaryCard({ type, value, onPress }: SummaryCardProps) 
         toValue: 2,
         duration: 100,
         useNativeDriver: true,
-      }),
-      Animated.timing(glowAnim, {
-        toValue: 1,
-        duration: 150,
-        useNativeDriver: false,
       }),
     ]).start();
   };
@@ -52,18 +46,8 @@ export default function SummaryCard({ type, value, onPress }: SummaryCardProps) 
         tension: 300,
         friction: 10,
       }),
-      Animated.timing(glowAnim, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: false,
-      }),
     ]).start();
   };
-
-  const animatedBorderColor = glowAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['rgba(0, 255, 255, 0.15)', 'rgba(0, 255, 255, 0.5)'],
-  });
 
   return (
     <Pressable
@@ -78,7 +62,6 @@ export default function SummaryCard({ type, value, onPress }: SummaryCardProps) 
           isPriority && styles.priorityCard,
           {
             transform: [{ scale: scaleAnim }, { translateY: translateYAnim }],
-            borderColor: animatedBorderColor,
           },
         ]}
       >
@@ -112,24 +95,8 @@ const styles = StyleSheet.create({
     padding: 24,
     minHeight: 160,
     justifyContent: 'space-between',
-    // 3D shadow effect with cyan glow
-    shadowColor: '#00FFFF',
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 6,
-    // Cyan outline
-    borderWidth: 1.5,
-    borderColor: 'rgba(0, 255, 255, 0.15)',
-    // 3D bottom edge
-    borderBottomWidth: 3,
-    borderBottomColor: 'rgba(0, 200, 200, 0.2)',
   },
-  priorityCard: {
-    borderColor: 'rgba(0, 255, 255, 0.25)',
-    shadowColor: '#00FFFF',
-    shadowOpacity: 0.18,
-  },
+  priorityCard: {},
   cardTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -137,7 +104,7 @@ const styles = StyleSheet.create({
   },
   cardLabel: {
     fontSize: 10,
-    fontFamily: 'DMSans-Bold',
+    fontFamily: 'BricolageGrotesque-Bold',
     color: '#888888',
     letterSpacing: 1.5,
     textTransform: 'uppercase',
@@ -157,12 +124,12 @@ const styles = StyleSheet.create({
   },
   cardValue: {
     fontSize: 40,
-    fontFamily: 'DMSans-Regular',
+    fontFamily: 'BricolageGrotesque-Regular',
     color: '#161117',
   },
   cardMeta: {
     fontSize: 12,
-    fontFamily: 'DMSans-Bold',
+    fontFamily: 'BricolageGrotesque-Bold',
     color: '#161117',
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(47,0,255,0.2)',
@@ -172,7 +139,7 @@ const styles = StyleSheet.create({
   },
   cardMetaSmall: {
     fontSize: 10,
-    fontFamily: 'DMSans-Bold',
+    fontFamily: 'BricolageGrotesque-Bold',
     color: '#888888',
     letterSpacing: 1.2,
     marginTop: 8,

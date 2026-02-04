@@ -86,6 +86,30 @@ export function NotificationIcon() {
   );
 }
 
+export function TimelineNavIcon({ color = '#2F00FF' }: { color?: string }) {
+  return (
+    <Svg width={24} height={24} viewBox="0 0 24 24" fill={color}>
+      <Path
+        d="M3,14L3.5,14.07L8.07,9.5C7.89,8.85 8.06,8.11 8.59,7.59C9.37,6.8 10.63,6.8 11.41,7.59C11.94,8.11 12.11,8.85 11.93,9.5L14.5,12.07L15,12C15.18,12 15.35,12 15.5,12.07L19.07,8.5C19,8.35 19,8.18 19,8A2,2 0 0,1 21,6A2,2 0 0,1 23,8A2,2 0 0,1 21,10C20.82,10 20.65,10 20.5,9.93L16.93,13.5C17,13.65 17,13.82 17,14A2,2 0 0,1 15,16A2,2 0 0,1 13,14L13.07,13.5L10.5,10.93C10.18,11 9.82,11 9.5,10.93L4.93,15.5L5,16A2,2 0 0,1 3,18A2,2 0 0,1 1,16A2,2 0 0,1 3,14Z"
+        fill={color}
+        stroke={color}
+      />
+    </Svg>
+  );
+}
+
+export function BellNavIcon({ color = '#2F00FF' }: { color?: string }) {
+  return (
+    <Svg width={24} height={24} viewBox="0 0 24 24" fill={color}>
+      <Path
+        d="M21,19V20H3V19L5,17V11C5,7.9 7.03,5.17 10,4.29C10,4.19 10,4.1 10,4A2,2 0 0,1 12,2A2,2 0 0,1 14,4C14,4.1 14,4.19 14,4.29C16.97,5.17 19,7.9 19,11V17L21,19M14,21A2,2 0 0,1 12,23A2,2 0 0,1 10,21"
+        fill={color}
+        stroke={color}
+      />
+    </Svg>
+  );
+}
+
 export function GlowTopRight() {
   return (
     <Svg width={520} height={520}>
@@ -132,18 +156,11 @@ export function BackIcon({ color = '#121018' }: { color?: string }) {
 
 export function ScheduleIcon({ color = '#2F00FF' }: { color?: string }) {
   return (
-    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+    <Svg width={24} height={24} viewBox="0 0 24 24" fill={color}>
       <Path
-        d="M12 6V12L16 14"
+        d="M12 2C6.5 2 2 6.5 2 12C2 17.5 6.5 22 12 22C17.5 22 22 17.5 22 12S17.5 2 12 2M12.5 12.2L9.8 17L8.5 16.2L11 11.8V7H12.5V12.2Z"
+        fill={color}
         stroke={color}
-        strokeWidth={2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <Path
-        d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z"
-        stroke={color}
-        strokeWidth={2}
       />
     </Svg>
   );
@@ -172,27 +189,11 @@ export function CheckAllIcon({ color = '#ffffff' }: { color?: string }) {
 
 export function CalendarSmallIcon({ color = '#2F00FF' }: { color?: string }) {
   return (
-    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+    <Svg width={24} height={24} viewBox="0 0 24 24" fill={color}>
       <Path
-        d="M16 2V6M8 2V6"
+        d="M19,19H5V8H19M16,1V3H8V1H6V3H5C3.89,3 3,3.89 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5C21,3.89 20.1,3 19,3H18V1"
+        fill={color}
         stroke={color}
-        strokeWidth={2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <Path
-        d="M3 10H21"
-        stroke={color}
-        strokeWidth={2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <Path
-        d="M5 4H19C20.1046 4 21 4.89543 21 6V20C21 21.1046 20.1046 22 19 22H5C3.89543 22 3 21.1046 3 20V6C3 4.89543 3.89543 4 5 4Z"
-        stroke={color}
-        strokeWidth={2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
       />
     </Svg>
   );
@@ -220,34 +221,11 @@ export function EditNoteIcon({ color = '#2F00FF', opacity = 0.4 }: { color?: str
 
 export function RepeatIcon({ color = '#2F00FF' }: { color?: string }) {
   return (
-    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+    <Svg width={24} height={24} viewBox="0 0 24 24" fill={color}>
       <Path
-        d="M17 1L21 5L17 9"
+        d="M17,17H7V14L3,18L7,22V19H19V13H17M7,7H17V10L21,6L17,2V5H5V11H7V7Z"
+        fill={color}
         stroke={color}
-        strokeWidth={2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <Path
-        d="M3 11V9C3 7.93913 3.42143 6.92172 4.17157 6.17157C4.92172 5.42143 5.93913 5 7 5H21"
-        stroke={color}
-        strokeWidth={2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <Path
-        d="M7 23L3 19L7 15"
-        stroke={color}
-        strokeWidth={2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <Path
-        d="M21 13V15C21 16.0609 20.5786 17.0783 19.8284 17.8284C19.0783 18.5786 18.0609 19 17 19H3"
-        stroke={color}
-        strokeWidth={2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
       />
     </Svg>
   );
@@ -320,15 +298,24 @@ export function CalendarWeekIcon({ color = '#2F00FF' }: { color?: string }) {
 
 export function BookmarkIcon({ color = '#2F00FF' }: { color?: string }) {
   return (
-    <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
+    <Svg width={24} height={24} viewBox="0 0 24 24" fill={color}>
       <Path
-        d="M4 17.9808V9.70753C4 6.07416 4 4.25748 5.17157 3.12874C6.34315 2 8.22876 2 12 2C15.7712 2 17.6569 2 18.8284 3.12874C20 4.25748 20 6.07416 20 9.70753V17.9808C20 20.2867 20 21.4396 19.2272 21.8523C17.7305 22.6514 14.9232 19.9852 13.59 19.1824C12.8168 18.7168 12.4302 18.484 12 18.484C11.5698 18.484 11.1832 18.7168 10.41 19.1824C9.0768 19.9852 6.26947 22.6514 4.77285 21.8523C4 21.4396 4 20.2867 4 17.9808Z"
+        d="M15,5A2,2 0 0,1 17,7V23L10,20L3,23V7C3,5.89 3.9,5 5,5H15M9,1H19A2,2 0 0,1 21,3V19L19,18.13V3H7A2,2 0 0,1 9,1Z"
+        fill={color}
         stroke={color}
-        strokeWidth={1.5}
-        strokeLinecap="round"
-        strokeLinejoin="round"
       />
-      <Path d="M4 7H20" stroke={color} strokeWidth={1.5} />
+    </Svg>
+  );
+}
+
+export function AccountSettingsIcon({ color = '#2F00FF' }: { color?: string }) {
+  return (
+    <Svg width={24} height={24} viewBox="0 0 24 24" fill={color}>
+      <Path
+        d="M12,4A4,4 0 0,1 16,8A4,4 0 0,1 12,12A4,4 0 0,1 8,8A4,4 0 0,1 12,4M12,14C16.42,14 20,15.79 20,18V20H4V18C4,15.79 7.58,14 12,14M7,22H9V24H7V22M11,22H13V24H11V22M15,22H17V24H15V22Z"
+        fill={color}
+        stroke={color}
+      />
     </Svg>
   );
 }
@@ -353,6 +340,178 @@ export function CheckCircleIcon({ color = '#2F00FF' }: { color?: string }) {
       />
       <Path
         d="M22 4L12 14.01L9 11.01"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+export function KeyboardIcon({ color = '#5e5e8d' }: { color?: string }) {
+  return (
+    <Svg width={26} height={26} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M3 7.5C3 6.11929 4.11929 5 5.5 5H18.5C19.8807 5 21 6.11929 21 7.5V16.5C21 17.8807 19.8807 19 18.5 19H5.5C4.11929 19 3 17.8807 3 16.5V7.5Z"
+        stroke={color}
+        strokeWidth={1.6}
+      />
+      <Path
+        d="M7 10H9M11 10H13M15 10H17M7 14H10M12 14H17"
+        stroke={color}
+        strokeWidth={1.6}
+        strokeLinecap="round"
+      />
+    </Svg>
+  );
+}
+
+export function HistoryIcon({ color = '#5e5e8d' }: { color?: string }) {
+  return (
+    <Svg width={26} height={26} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M12 6V12L15.5 13.8"
+        stroke={color}
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M4 12a8 8 0 1 0 2.3-5.7"
+        stroke={color}
+        strokeWidth={1.8}
+        strokeLinecap="round"
+      />
+      <Path
+        d="M4 4v4h4"
+        stroke={color}
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+export function StopIcon({ color = '#ffffff' }: { color?: string }) {
+  return (
+    <Svg width={26} height={26} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M7 7H17V17H7V7Z"
+        fill={color}
+      />
+    </Svg>
+  );
+}
+
+export function WaveIcon({ color = 'rgba(255,255,255,0.45)' }: { color?: string }) {
+  return (
+    <Svg width={44} height={44} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M5 12C6.5 9.5 8 9.5 9.5 12C11 14.5 12.5 14.5 14 12C15.5 9.5 17 9.5 19 12"
+        stroke={color}
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+export function MicSparkleIcon({ size = 24 }: { size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <G fill="none">
+        <Path d="M24 0v24H0V0zM12.594 23.258l-.012.002-.071.035-.02.004-.014-.004-.071-.036c-.01-.003-.019 0-.024.006l-.004.01-.017.428.005.02.01.013.104.074.015.004.012-.004.104-.074.012-.016.004-.017-.017-.427c-.002-.01-.009-.017-.016-.018m.264-.113-.014.002-.184.093-.01.01-.003.011.018.43.005.012.008.008.201.092c.012.004.023 0 .029-.008l.004-.014-.034-.614c-.003-.012-.01-.02-.02-.022m-.715.002a.023.023 0 0 0-.027.006l-.006.014-.034.614c0 .012.007.02.017.024l.015-.002.201-.093.01-.008.003-.011.018-.43-.003-.012-.01-.01z" />
+        <Path
+          fill="#2F00FF"
+          d="M19.07 12.01a1 1 0 0 1 .85 1.132A8.004 8.004 0 0 1 13 19.938V21a1 1 0 1 1-2 0v-1.062a8.005 8.005 0 0 1-6.919-6.796 1 1 0 0 1 1.98-.284 6.001 6.001 0 0 0 11.878 0 1 1 0 0 1 1.132-.848M12 2c.819 0 1.592.197 2.274.546a3 3 0 0 0 .757 5.293l.378.13a1 1 0 0 1 .623.622l.129.378c.17.5.464.932.839 1.267V12a5 5 0 0 1-10 0V7a5 5 0 0 1 5-5m7-1a1 1 0 0 1 .898.56l.048.117.13.378a3 3 0 0 0 1.684 1.8l.185.07.378.129a1 1 0 0 1 .118 1.844l-.118.048-.378.13a3 3 0 0 0-1.8 1.684l-.07.185-.129.378a1 1 0 0 1-1.844.117l-.048-.117-.13-.378a3 3 0 0 0-1.684-1.8l-.185-.07-.378-.129a1 1 0 0 1-.118-1.844l.118-.048.378-.13a3 3 0 0 0 1.8-1.684l.07-.185.129-.378A1 1 0 0 1 19 1"
+        />
+      </G>
+    </Svg>
+  );
+}
+
+export function GiftIcon({ color = '#6B7FA0' }: { color?: string }) {
+  return (
+    <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M20 12V22H4V12"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M22 7H2V12H22V7Z"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M12 22V7"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M12 7H7.5C6.83696 7 6.20107 6.73661 5.73223 6.26777C5.26339 5.79893 5 5.16304 5 4.5C5 3.83696 5.26339 3.20107 5.73223 2.73223C6.20107 2.26339 6.83696 2 7.5 2C11 2 12 7 12 7Z"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M12 7H16.5C17.163 7 17.7989 6.73661 18.2678 6.26777C18.7366 5.79893 19 5.16304 19 4.5C19 3.83696 18.7366 3.20107 18.2678 2.73223C17.7989 2.26339 17.163 2 16.5 2C13 2 12 7 12 7Z"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+export function MicIcon({ color = '#ffffff', size = 26 }: { color?: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M12 1C10.34 1 9 2.34 9 4V12C9 13.66 10.34 15 12 15C13.66 15 15 13.66 15 12V4C15 2.34 13.66 1 12 1Z"
+        fill={color}
+      />
+      <Path
+        d="M19 10V12C19 15.87 15.87 19 12 19C8.13 19 5 15.87 5 12V10"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M12 19V23M8 23H16"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+export function SendIcon({ color = '#ffffff', size = 24 }: { color?: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M22 2L11 13"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M22 2L15 22L11 13L2 9L22 2Z"
         stroke={color}
         strokeWidth={2}
         strokeLinecap="round"

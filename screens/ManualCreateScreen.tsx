@@ -1,22 +1,32 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
+  Dimensions,
+  FlatList,
   Keyboard,
   KeyboardAvoidingView,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  TouchableOpacity,
   TouchableWithoutFeedback,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BackIcon, CalendarSmallIcon, ScheduleIcon, CheckAllIcon, GlowTopRight, GlowBottomLeft, NotificationIcon, RepeatIcon, ChevronRightIcon, CloseIcon, BlockIcon, DailyIcon, BookmarkIcon, SlidersIcon, CheckCircleIcon } from '../components/icons';
+import { BackIcon, CalendarSmallIcon, ScheduleIcon, CheckAllIcon, GlowTopRight, GlowBottomLeft, BellNavIcon, RepeatIcon, ChevronRightIcon, CloseIcon, BlockIcon, DailyIcon, BookmarkIcon, SlidersIcon, CheckCircleIcon, MicSparkleIcon } from '../components/icons';
 import RecurringRuleModal from '../components/RecurringRuleModal';
+import { VoiceOrbComponent } from '../components/VoiceOrbComponent';
 import { createRecurringRule, getRecurringRules } from '../lib/reminders';
+import { parseReminderFromVoice } from '../lib/aiReminders';
+import { useVoiceRecording } from '../hooks/useVoiceRecording';
 import { CreateReminderInput, NOTIFICATION_TIMING_OPTIONS, RecurringOption, RecurringRule } from '../lib/types';
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // Animated Card Component
 function AnimatedCard({
@@ -30,7 +40,6 @@ function AnimatedCard({
 }) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const translateYAnim = useRef(new Animated.Value(0)).current;
-  const glowAnim = useRef(new Animated.Value(0)).current;
 
   const handlePressIn = () => {
     Animated.parallel([
@@ -44,11 +53,6 @@ function AnimatedCard({
         toValue: 1,
         duration: 100,
         useNativeDriver: true,
-      }),
-      Animated.timing(glowAnim, {
-        toValue: 1,
-        duration: 150,
-        useNativeDriver: false,
       }),
     ]).start();
   };
@@ -67,18 +71,8 @@ function AnimatedCard({
         tension: 300,
         friction: 10,
       }),
-      Animated.timing(glowAnim, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: false,
-      }),
     ]).start();
   };
-
-  const animatedBorderColor = glowAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['rgba(0, 255, 255, 0.1)', 'rgba(0, 255, 255, 0.4)'],
-  });
 
   if (!onPress) {
     return <View style={style}>{children}</View>;
@@ -91,7 +85,6 @@ function AnimatedCard({
           style,
           {
             transform: [{ scale: scaleAnim }, { translateY: translateYAnim }],
-            borderColor: animatedBorderColor,
           },
         ]}
       >
@@ -303,25 +296,220 @@ function AnimatedConfirmButton({ onPress, label }: { onPress: () => void; label:
   );
 }
 
+const DATE_ITEM_WIDTH = 56;
+const TIME_ITEM_HEIGHT = 36;
+
+// Combined Date & Time Picker Component - Single Horizontal Row
+function DateTimePicker({
+  selectedDate,
+  selectedTime,
+  onDateChange,
+  onTimeChange,
+}: {
+  selectedDate: Date;
+  selectedTime: Date;
+  onDateChange: (date: Date) => void;
+  onTimeChange: (time: Date) => void;
+}) {
+  const dateListRef = useRef<FlatList>(null);
+  const hourScrollRef = useRef<ScrollView>(null);
+  const minuteScrollRef = useRef<ScrollView>(null);
+
+  const [selectedHour, setSelectedHour] = useState(selectedTime.getHours());
+  const [selectedMinute, setSelectedMinute] = useState(selectedTime.getMinutes());
+
+  const [dates] = useState(() => {
+    return Array.from({ length: 60 }, (_, i) => {
+      const date = new Date();
+      date.setHours(0, 0, 0, 0);
+      date.setDate(date.getDate() + i);
+      return date;
+    });
+  });
+
+  const hours = Array.from({ length: 24 }, (_, i) => i);
+  const minutes = Array.from({ length: 60 }, (_, i) => i);
+
+  const selectedDateIndex = dates.findIndex(
+    (d) => d.toDateString() === selectedDate.toDateString()
+  );
+
+  // Initial scroll to selected values
+  useEffect(() => {
+    setTimeout(() => {
+      if (dateListRef.current && selectedDateIndex >= 0) {
+        dateListRef.current.scrollToIndex({
+          index: selectedDateIndex,
+          animated: false,
+          viewPosition: 0.5,
+        });
+      }
+      hourScrollRef.current?.scrollTo({
+        y: selectedHour * TIME_ITEM_HEIGHT,
+        animated: false,
+      });
+      minuteScrollRef.current?.scrollTo({
+        y: selectedMinute * TIME_ITEM_HEIGHT,
+        animated: false,
+      });
+    }, 100);
+  }, []);
+
+  // Update time when hour/minute changes
+  useEffect(() => {
+    const newTime = new Date(selectedTime);
+    newTime.setHours(selectedHour);
+    newTime.setMinutes(selectedMinute);
+    onTimeChange(newTime);
+  }, [selectedHour, selectedMinute]);
+
+  const handleHourScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const y = event.nativeEvent.contentOffset.y;
+    const index = Math.round(y / TIME_ITEM_HEIGHT);
+    const clampedIndex = Math.max(0, Math.min(index, hours.length - 1));
+    if (clampedIndex !== selectedHour) {
+      setSelectedHour(clampedIndex);
+    }
+  };
+
+  const handleMinuteScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const y = event.nativeEvent.contentOffset.y;
+    const index = Math.round(y / TIME_ITEM_HEIGHT);
+    const clampedIndex = Math.max(0, Math.min(index, minutes.length - 1));
+    if (clampedIndex !== selectedMinute) {
+      setSelectedMinute(clampedIndex);
+    }
+  };
+
+  const formatDayLabel = (date: Date) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    if (date.toDateString() === today.toDateString()) return 'Today';
+    if (date.toDateString() === tomorrow.toDateString()) return 'Tmrw';
+    return date.toLocaleDateString('en-US', { weekday: 'short' });
+  };
+
+  const renderDateItem = ({ item }: { item: Date }) => {
+    const isSelected = item.toDateString() === selectedDate.toDateString();
+
+    return (
+      <Pressable
+        onPress={() => onDateChange(item)}
+        style={[styles.compactDateItem, isSelected && styles.compactDateItemSelected]}
+      >
+        <Text style={[styles.compactDateDay, isSelected && styles.compactDateDaySelected]}>
+          {formatDayLabel(item)}
+        </Text>
+        <Text style={[styles.compactDateNum, isSelected && styles.compactDateNumSelected]}>
+          {item.getDate()}
+        </Text>
+      </Pressable>
+    );
+  };
+
+  const renderTimeWheel = (
+    items: number[],
+    selectedValue: number,
+    scrollRef: React.RefObject<ScrollView | null>,
+    onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => void,
+    isMinute: boolean = false
+  ) => {
+    return (
+      <View style={styles.compactTimeColumn}>
+        <ScrollView
+          ref={scrollRef}
+          showsVerticalScrollIndicator={false}
+          snapToInterval={TIME_ITEM_HEIGHT}
+          decelerationRate="fast"
+          onMomentumScrollEnd={onScroll}
+          onScrollEndDrag={onScroll}
+          contentContainerStyle={{ paddingVertical: TIME_ITEM_HEIGHT }}
+          style={styles.compactTimeScroll}
+          nestedScrollEnabled={true}
+          scrollEventThrottle={16}
+        >
+          {items.map((item) => {
+            const isSelected = item === selectedValue;
+            return (
+              <Pressable
+                key={item}
+                onPress={() => {
+                  scrollRef.current?.scrollTo({
+                    y: item * TIME_ITEM_HEIGHT,
+                    animated: true,
+                  });
+                  if (isMinute) {
+                    setSelectedMinute(item);
+                  } else {
+                    setSelectedHour(item);
+                  }
+                }}
+                style={styles.compactTimeItem}
+              >
+                <Text style={[styles.compactTimeText, isSelected && styles.compactTimeTextSelected]}>
+                  {item.toString().padStart(2, '0')}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+        <View style={styles.compactTimeHighlight} pointerEvents="none" />
+      </View>
+    );
+  };
+
+  return (
+    <View style={styles.dateTimePickerRow}>
+      {/* Date Section */}
+      <View style={styles.dateSection}>
+        <View style={styles.sectionHeader}>
+          <CalendarSmallIcon />
+          <Text style={styles.sectionLabel}>Date</Text>
+        </View>
+        <FlatList
+          ref={dateListRef}
+          data={dates}
+          renderItem={renderDateItem}
+          keyExtractor={(item) => item.toISOString()}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.dateListContent}
+          snapToInterval={DATE_ITEM_WIDTH + 6}
+          decelerationRate="fast"
+          getItemLayout={(_, index) => ({
+            length: DATE_ITEM_WIDTH + 6,
+            offset: (DATE_ITEM_WIDTH + 6) * index,
+            index,
+          })}
+          onScrollToIndexFailed={() => {}}
+        />
+      </View>
+
+      {/* Divider */}
+      <View style={styles.pickerDivider} />
+
+      {/* Time Section */}
+      <View style={styles.timeSection}>
+        <View style={styles.sectionHeader}>
+          <ScheduleIcon />
+          <Text style={styles.sectionLabel}>Time</Text>
+        </View>
+        <View style={styles.compactTimeWheels}>
+          {renderTimeWheel(hours, selectedHour, hourScrollRef, handleHourScroll, false)}
+          <Text style={styles.compactTimeSep}>:</Text>
+          {renderTimeWheel(minutes, selectedMinute, minuteScrollRef, handleMinuteScroll, true)}
+        </View>
+      </View>
+    </View>
+  );
+}
+
 interface ManualCreateScreenProps {
   onBack: () => void;
   onSave: (input: CreateReminderInput) => Promise<void>;
-}
-
-function formatDateDisplay(date: Date): string {
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
-}
-
-function formatTimeDisplay(date: Date): string {
-  return date.toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  });
 }
 
 function getNotifyLabel(minutes: number): string {
@@ -330,6 +518,26 @@ function getNotifyLabel(minutes: number): string {
 }
 
 export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScreenProps) {
+  // Entrance animation
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        tension: 65,
+        friction: 11,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [fadeAnim, slideAnim]);
+
   // Fetch saved recurring rules from database
   const [savedRules, setSavedRules] = useState<RecurringRule[]>([]);
 
@@ -354,13 +562,185 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
   const [showRecurringModal, setShowRecurringModal] = useState(false);
   const [showRecurringPicker, setShowRecurringPicker] = useState(false);
 
-  // Date picker modal state
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showTimePicker, setShowTimePicker] = useState(false);
+  // Notification picker modal state
   const [showNotifyPicker, setShowNotifyPicker] = useState(false);
-  const [tempDate, setTempDate] = useState(new Date());
-  const [tempTime, setTempTime] = useState(new Date());
   const [tempNotifyMinutes, setTempNotifyMinutes] = useState(0);
+
+  // Voice mode state
+  const [isVoiceMode, setIsVoiceMode] = useState(false);
+  const [voiceTranscript, setVoiceTranscript] = useState('');
+  const [aiResponse, setAiResponse] = useState('');
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [isProcessingVoice, setIsProcessingVoice] = useState(false);
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+
+  // Voice recording hook
+  const { isRecording, duration, error: recordingError, startRecording, stopRecording, cancelRecording } = useVoiceRecording();
+
+  // Voice mode animations
+  const micPositionAnim = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
+  const micScaleAnim = useRef(new Animated.Value(1)).current;
+  const voiceOverlayOpacity = useRef(new Animated.Value(0)).current;
+
+  // Check microphone permission on mount
+  useEffect(() => {
+    import('expo-audio').then(({ AudioModule }) => {
+      AudioModule.getRecordingPermissionsAsync().then((status) => {
+        setHasPermission(status.granted);
+      });
+    });
+  }, []);
+
+
+  // Handle voice mode toggle
+  const handleMicPress = useCallback(async () => {
+    if (isVoiceMode) return;
+
+    // Check and request permission if needed
+    if (hasPermission === false) {
+      const { AudioModule } = await import('expo-audio');
+      const status = await AudioModule.requestRecordingPermissionsAsync();
+      setHasPermission(status.granted);
+
+      if (!status.granted) {
+        setVoiceError('Microphone permission is required for voice reminders.');
+        return;
+      }
+    }
+
+    setVoiceError(null);
+    setVoiceTranscript('');
+    setAiResponse('');
+
+    // Animate mic to center with smooth transition
+    Animated.parallel([
+      Animated.spring(micPositionAnim, {
+        toValue: { x: -(SCREEN_WIDTH / 2 - 48 - 24), y: SCREEN_HEIGHT / 3 - 48 },
+        useNativeDriver: true,
+        tension: 40,
+        friction: 7,
+      }),
+      Animated.spring(micScaleAnim, {
+        toValue: 3.5,
+        useNativeDriver: true,
+        tension: 40,
+        friction: 7,
+      }),
+      Animated.timing(voiceOverlayOpacity, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+    ]).start(async () => {
+      setIsVoiceMode(true);
+      // Start recording after animation completes
+      await startRecording();
+    });
+  }, [isVoiceMode, hasPermission, micPositionAnim, micScaleAnim, voiceOverlayOpacity, startRecording]);
+
+  // Handle stop recording and process voice
+  const handleStopVoice = useCallback(async () => {
+    if (!isRecording) return;
+
+    setIsProcessingVoice(true);
+    setVoiceError(null);
+
+    try {
+      const audioData = await stopRecording();
+      if (!audioData) {
+        throw new Error('No audio recorded');
+      }
+
+      // Process voice with AI
+      const result = await parseReminderFromVoice(audioData.base64, audioData.mimeType);
+
+      // Update transcript
+      setVoiceTranscript(result.transcript);
+
+      // Check if this is a conversation or reminder creation
+      if (result.type === 'conversation') {
+        // Just display the AI response and keep voice mode open
+        setAiResponse(result.response);
+        // Don't close voice mode - user can continue chatting
+      } else if (result.type === 'reminder') {
+        // Clear any previous AI response
+        setAiResponse('');
+
+        // Populate form fields from the parsed reminder
+        if (result.reminder.title) {
+          setTitle(result.reminder.title);
+        }
+        if (result.reminder.scheduled_time) {
+          const scheduledDate = new Date(result.reminder.scheduled_time);
+          setSelectedDate(scheduledDate);
+          setSelectedTime(scheduledDate);
+        }
+        if (result.reminder.description) {
+          setNotes(result.reminder.description);
+        }
+        if (result.reminder.is_priority !== undefined) {
+          setIsPriority(result.reminder.is_priority);
+        }
+        if (result.reminder.notify_before_minutes !== undefined) {
+          setNotifyBeforeMinutes(result.reminder.notify_before_minutes);
+        }
+
+        // Handle recurring rule from voice
+        if (result.recurringRule) {
+          // Set as custom rule with the parsed data
+          setCustomRule({
+            id: '', // Will be created on save
+            name: result.recurringRule.name,
+            frequency: result.recurringRule.frequency,
+            frequency_unit: result.recurringRule.frequency_unit,
+            selected_days: result.recurringRule.selected_days,
+          });
+          setRecurringOption('custom');
+          setSelectedSavedRule(null);
+        }
+
+        // Close voice mode after a brief delay to show the transcript
+        setTimeout(() => {
+          handleCloseVoiceMode();
+        }, 1500);
+      }
+    } catch (err) {
+      setVoiceError(err instanceof Error ? err.message : 'Failed to process voice');
+    } finally {
+      setIsProcessingVoice(false);
+    }
+  }, [isRecording, stopRecording]);
+
+  // Handle close voice mode
+  const handleCloseVoiceMode = useCallback(async () => {
+    await cancelRecording();
+    setIsVoiceMode(false);
+    setVoiceTranscript('');
+    setAiResponse('');
+    setVoiceError(null);
+
+    // Animate mic back to original position
+    Animated.parallel([
+      Animated.spring(micPositionAnim, {
+        toValue: { x: 0, y: 0 },
+        useNativeDriver: true,
+        tension: 50,
+        friction: 8,
+      }),
+      Animated.spring(micScaleAnim, {
+        toValue: 1,
+        useNativeDriver: true,
+        tension: 50,
+        friction: 8,
+      }),
+      Animated.timing(voiceOverlayOpacity, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [cancelRecording, micPositionAnim, micScaleAnim, voiceOverlayOpacity]);
+
 
   const handleSave = useCallback(async () => {
     if (!title.trim()) {
@@ -444,6 +824,7 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
       setSelectedSavedRule(rule);
       setCustomRule(null);
     } else {
+      // Reset saved rule and custom rule for other options
       setSelectedSavedRule(null);
       setCustomRule(null);
     }
@@ -456,23 +837,17 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
     setShowRecurringPicker(false); // Close repeat picker after saving custom rule
   };
 
-  // Generate date options (today + next 30 days)
-  const dateOptions = Array.from({ length: 31 }, (_, i) => {
-    const date = new Date();
-    date.setDate(date.getDate() + i);
-    return date;
-  });
-
-  // Generate time options (every 15 minutes)
-  const timeOptions = Array.from({ length: 96 }, (_, i) => {
-    const date = new Date();
-    date.setHours(Math.floor(i / 4), (i % 4) * 15, 0, 0);
-    return date;
-  });
-
   return (
     <View style={styles.root}>
-      <View style={styles.canvas}>
+      <Animated.View
+        style={[
+          styles.canvas,
+          {
+            opacity: fadeAnim,
+            transform: [{ translateY: slideAnim }],
+          },
+        ]}
+      >
         <View style={styles.glowTopRight}>
           <GlowTopRight />
         </View>
@@ -497,7 +872,19 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
               <View style={styles.header}>
                 <AnimatedBackButton onPress={onBack} />
                 <Text style={styles.headerTitle}>New Reminder</Text>
-                <View style={styles.headerSpacer} />
+                <Pressable style={styles.headerIcon} onPress={handleMicPress}>
+                  <Animated.View
+                    style={{
+                      transform: [
+                        { translateX: micPositionAnim.x },
+                        { translateY: micPositionAnim.y },
+                        { scale: micScaleAnim },
+                      ],
+                    }}
+                  >
+                    <MicSparkleIcon size={24} />
+                  </Animated.View>
+                </Pressable>
               </View>
 
               {/* Bento Grid */}
@@ -517,36 +904,13 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
                   </View>
                 </View>
 
-                {/* Date & Time Row */}
-                <View style={styles.dateTimeRow}>
-                  <AnimatedCard
-                    style={styles.dateTimeCard}
-                    onPress={() => {
-                      setTempDate(selectedDate);
-                      setShowDatePicker(true);
-                    }}
-                  >
-                    <View style={styles.dateTimeHeader}>
-                      <CalendarSmallIcon />
-                      <Text style={styles.dateTimeLabel}>Date</Text>
-                    </View>
-                    <Text style={styles.dateTimeValue}>{formatDateDisplay(selectedDate)}</Text>
-                  </AnimatedCard>
-
-                  <AnimatedCard
-                    style={styles.dateTimeCard}
-                    onPress={() => {
-                      setTempTime(selectedTime);
-                      setShowTimePicker(true);
-                    }}
-                  >
-                    <View style={styles.dateTimeHeader}>
-                      <ScheduleIcon />
-                      <Text style={styles.dateTimeLabel}>Time</Text>
-                    </View>
-                    <Text style={styles.dateTimeValue}>{formatTimeDisplay(selectedTime)}</Text>
-                  </AnimatedCard>
-                </View>
+                {/* Date & Time Picker - Single Row */}
+                <DateTimePicker
+                  selectedDate={selectedDate}
+                  selectedTime={selectedTime}
+                  onDateChange={setSelectedDate}
+                  onTimeChange={setSelectedTime}
+                />
 
                 {/* Notification Timing Card */}
                 <AnimatedCard
@@ -556,11 +920,11 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
                     setShowNotifyPicker(true);
                   }}
                 >
-                  <View style={styles.dateTimeHeader}>
+                  <View style={styles.notifyHeader}>
                     <View style={styles.notifyIconWrapper}>
-                      <NotificationIcon />
+                      <BellNavIcon color="#2F00FF" />
                     </View>
-                    <Text style={styles.dateTimeLabel}>Notify</Text>
+                    <Text style={styles.notifyLabel}>Notify</Text>
                   </View>
                   <Text style={styles.notifyValue}>{getNotifyLabel(notifyBeforeMinutes)}</Text>
                 </AnimatedCard>
@@ -631,85 +995,6 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
             />
           </View>
         </View>
-
-        {/* Date Picker Modal */}
-        {showDatePicker && (
-          <View style={styles.modalOverlay}>
-            <Pressable
-              style={styles.modalBackdrop}
-              onPress={() => setShowDatePicker(false)}
-            />
-            <Animated.View style={[styles.pickerModal, { paddingBottom: insets.bottom + 16 }]}>
-              <View style={styles.pickerHeader}>
-                <Text style={styles.pickerTitle}>Select Date</Text>
-                <Pressable onPress={() => setShowDatePicker(false)}>
-                  <Text style={styles.pickerCancel}>Cancel</Text>
-                </Pressable>
-              </View>
-              <ScrollView style={styles.pickerScroll} showsVerticalScrollIndicator={false}>
-                {dateOptions.map((date, index) => {
-                  const isSelected = date.toDateString() === tempDate.toDateString();
-                  const isToday = date.toDateString() === new Date().toDateString();
-                  return (
-                    <AnimatedPickerOptionItem
-                      key={index}
-                      onPress={() => setTempDate(date)}
-                      isSelected={isSelected}
-                      label={isToday ? 'Today' : formatDateDisplay(date)}
-                    />
-                  );
-                })}
-              </ScrollView>
-              <AnimatedConfirmButton
-                onPress={() => {
-                  setSelectedDate(tempDate);
-                  setShowDatePicker(false);
-                }}
-                label="Confirm"
-              />
-            </Animated.View>
-          </View>
-        )}
-
-        {/* Time Picker Modal */}
-        {showTimePicker && (
-          <View style={styles.modalOverlay}>
-            <Pressable
-              style={styles.modalBackdrop}
-              onPress={() => setShowTimePicker(false)}
-            />
-            <Animated.View style={[styles.pickerModal, { paddingBottom: insets.bottom + 16 }]}>
-              <View style={styles.pickerHeader}>
-                <Text style={styles.pickerTitle}>Select Time</Text>
-                <Pressable onPress={() => setShowTimePicker(false)}>
-                  <Text style={styles.pickerCancel}>Cancel</Text>
-                </Pressable>
-              </View>
-              <ScrollView style={styles.pickerScroll} showsVerticalScrollIndicator={false}>
-                {timeOptions.map((time, index) => {
-                  const isSelected =
-                    time.getHours() === tempTime.getHours() &&
-                    time.getMinutes() === tempTime.getMinutes();
-                  return (
-                    <AnimatedPickerOptionItem
-                      key={index}
-                      onPress={() => setTempTime(time)}
-                      isSelected={isSelected}
-                      label={formatTimeDisplay(time)}
-                    />
-                  );
-                })}
-              </ScrollView>
-              <AnimatedConfirmButton
-                onPress={() => {
-                  setSelectedTime(tempTime);
-                  setShowTimePicker(false);
-                }}
-                label="Confirm"
-              />
-            </Animated.View>
-          </View>
-        )}
 
         {/* Notification Timing Picker Modal */}
         {showNotifyPicker && (
@@ -935,7 +1220,32 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
           initialRule={customRule ?? undefined}
           selectedTime={selectedTime}
         />
-      </View>
+
+        {/* Voice Recording Overlay */}
+        {isVoiceMode && (
+          <Animated.View
+            style={[
+              StyleSheet.absoluteFillObject,
+              {
+                opacity: voiceOverlayOpacity,
+                pointerEvents: isVoiceMode ? 'auto' : 'none',
+                zIndex: 200,
+              },
+            ]}
+          >
+            <VoiceOrbComponent
+              isRecording={isRecording}
+              duration={duration}
+              transcript={voiceTranscript}
+              aiResponse={aiResponse}
+              error={voiceError || recordingError || null}
+              status={isProcessingVoice ? 'processing' : isRecording ? 'recording' : 'idle'}
+              onCancel={handleCloseVoiceMode}
+              onStop={handleStopVoice}
+            />
+          </Animated.View>
+        )}
+      </Animated.View>
     </View>
   );
 }
@@ -982,14 +1292,16 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 18,
-    fontFamily: 'DMSans-Bold',
+    fontFamily: 'BricolageGrotesque-Bold',
     color: '#121018',
     flex: 1,
     textAlign: 'center',
-    marginRight: 48,
   },
-  headerSpacer: {
-    width: 0,
+  headerIcon: {
+    width: 48,
+    height: 48,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
   },
   bentoGrid: {
     gap: 16,
@@ -1005,7 +1317,7 @@ const styles = StyleSheet.create({
   },
   cardLabel: {
     fontSize: 10,
-    fontFamily: 'DMSans-Bold',
+    fontFamily: 'BricolageGrotesque-Bold',
     color: '#2F00FF',
     opacity: 0.6,
     textTransform: 'uppercase',
@@ -1014,7 +1326,7 @@ const styles = StyleSheet.create({
   },
   cardLabelSmall: {
     fontSize: 10,
-    fontFamily: 'DMSans-Bold',
+    fontFamily: 'BricolageGrotesque-Bold',
     color: 'rgba(18, 16, 24, 0.4)',
     textTransform: 'uppercase',
     letterSpacing: 1.5,
@@ -1027,65 +1339,140 @@ const styles = StyleSheet.create({
   titleInput: {
     flex: 1,
     fontSize: 24,
-    fontFamily: 'DMSans-Bold',
+    fontFamily: 'BricolageGrotesque-Bold',
     color: '#121018',
     padding: 0,
   },
-  dateTimeRow: {
+  // Combined Date & Time Picker - Single Row
+  dateTimePickerRow: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 16,
     flexDirection: 'row',
-    gap: 16,
+    alignItems: 'stretch',
   },
-  dateTimeCard: {
+  dateSection: {
     flex: 1,
+    justifyContent: 'center',
+    paddingTop: 4,
+  },
+  timeSection: {
+    width: 120,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 10,
+  },
+  sectionLabel: {
+    fontSize: 9,
+    fontFamily: 'BricolageGrotesque-Bold',
+    color: 'rgba(18, 16, 24, 0.4)',
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+  },
+  dateListContent: {
+    gap: 6,
+  },
+  compactDateItem: {
+    width: 56,
+    height: 64,
+    borderRadius: 12,
+    backgroundColor: '#f8f7fa',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+  },
+  compactDateItemSelected: {
+    backgroundColor: '#2F00FF',
+  },
+  compactDateDay: {
+    fontSize: 9,
+    fontFamily: 'BricolageGrotesque-Bold',
+    color: 'rgba(18, 16, 24, 0.5)',
+    textTransform: 'uppercase',
+  },
+  compactDateDaySelected: {
+    color: 'rgba(255, 255, 255, 0.7)',
+  },
+  compactDateNum: {
+    fontSize: 20,
+    fontFamily: 'BricolageGrotesque-Bold',
+    color: '#121018',
+  },
+  compactDateNumSelected: {
+    color: '#ffffff',
+  },
+  pickerDivider: {
+    width: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.06)',
+    marginHorizontal: 12,
+  },
+  compactTimeWheels: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 108,
+  },
+  compactTimeColumn: {
+    width: 44,
+    height: 108,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  compactTimeScroll: {
+    height: 108,
+    overflow: 'hidden',
+  },
+  compactTimeItem: {
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  compactTimeText: {
+    fontSize: 22,
+    fontFamily: 'BricolageGrotesque-Regular',
+    color: 'rgba(18, 16, 24, 0.25)',
+  },
+  compactTimeTextSelected: {
+    fontFamily: 'BricolageGrotesque-Bold',
+    color: '#121018',
+  },
+  compactTimeHighlight: {
+    position: 'absolute',
+    top: 36,
+    left: 0,
+    right: 0,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: 'rgba(47, 0, 255, 0.08)',
+    zIndex: -1,
+  },
+  compactTimeSep: {
+    fontSize: 22,
+    fontFamily: 'BricolageGrotesque-Bold',
+    color: '#121018',
+    marginHorizontal: 2,
+  },
+
+  notifyCard: {
     backgroundColor: '#ffffff',
     borderRadius: 16,
     padding: 20,
-    // 3D shadow effect with cyan glow
-    shadowColor: '#00FFFF',
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
-    // Cyan outline
-    borderWidth: 1.5,
-    borderColor: 'rgba(0, 255, 255, 0.1)',
-    // 3D bottom edge
-    borderBottomWidth: 2.5,
-    borderBottomColor: 'rgba(0, 200, 200, 0.15)',
   },
-  dateTimeHeader: {
+  notifyHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     marginBottom: 12,
   },
-  dateTimeLabel: {
+  notifyLabel: {
     fontSize: 10,
-    fontFamily: 'DMSans-Bold',
+    fontFamily: 'BricolageGrotesque-Bold',
     color: 'rgba(18, 16, 24, 0.4)',
     textTransform: 'uppercase',
     letterSpacing: 1.5,
-  },
-  dateTimeValue: {
-    fontSize: 18,
-    fontFamily: 'DMSans-Bold',
-    color: '#121018',
-  },
-  notifyCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 20,
-    // 3D shadow effect with cyan glow
-    shadowColor: '#00FFFF',
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
-    // Cyan outline
-    borderWidth: 1.5,
-    borderColor: 'rgba(0, 255, 255, 0.1)',
-    borderBottomWidth: 2.5,
-    borderBottomColor: 'rgba(0, 200, 200, 0.15)',
   },
   notifyIconWrapper: {
     transform: [{ scale: 0.7 }],
@@ -1094,24 +1481,13 @@ const styles = StyleSheet.create({
   },
   notifyValue: {
     fontSize: 16,
-    fontFamily: 'DMSans-Bold',
+    fontFamily: 'BricolageGrotesque-Bold',
     color: '#121018',
   },
   recurringCard: {
     backgroundColor: '#ffffff',
     borderRadius: 16,
     padding: 16,
-    // 3D shadow effect with cyan glow
-    shadowColor: '#00FFFF',
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
-    // Cyan outline
-    borderWidth: 1.5,
-    borderColor: 'rgba(0, 255, 255, 0.1)',
-    borderBottomWidth: 2.5,
-    borderBottomColor: 'rgba(0, 200, 200, 0.15)',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -1137,14 +1513,14 @@ const styles = StyleSheet.create({
   },
   recurringCardLabel: {
     fontSize: 10,
-    fontFamily: 'DMSans-Bold',
+    fontFamily: 'BricolageGrotesque-Bold',
     color: 'rgba(18, 16, 24, 0.4)',
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
   recurringCardValue: {
     fontSize: 16,
-    fontFamily: 'DMSans-Bold',
+    fontFamily: 'BricolageGrotesque-Bold',
     color: '#121018',
   },
   recurringCardValueActive: {
@@ -1176,7 +1552,7 @@ const styles = StyleSheet.create({
   },
   repeatPickerTitle: {
     fontSize: 20,
-    fontFamily: 'DMSans-Bold',
+    fontFamily: 'BricolageGrotesque-Bold',
     color: '#121018',
   },
   repeatPickerCloseButton: {
@@ -1230,7 +1606,7 @@ const styles = StyleSheet.create({
   },
   repeatPickerCardText: {
     fontSize: 15,
-    fontFamily: 'DMSans-Bold',
+    fontFamily: 'BricolageGrotesque-Bold',
     color: '#121018',
   },
   repeatPickerCardTextSelected: {
@@ -1250,7 +1626,7 @@ const styles = StyleSheet.create({
   },
   repeatPickerSectionTitle: {
     fontSize: 12,
-    fontFamily: 'DMSans-Bold',
+    fontFamily: 'BricolageGrotesque-Bold',
     color: 'rgba(18, 16, 24, 0.5)',
     textTransform: 'uppercase',
     letterSpacing: 1,
@@ -1288,11 +1664,11 @@ const styles = StyleSheet.create({
   },
   repeatPickerSavedText: {
     fontSize: 15,
-    fontFamily: 'DMSans-Regular',
+    fontFamily: 'BricolageGrotesque-Regular',
     color: '#121018',
   },
   repeatPickerSavedTextSelected: {
-    fontFamily: 'DMSans-Bold',
+    fontFamily: 'BricolageGrotesque-Bold',
     color: '#2F00FF',
   },
   repeatPickerCustomCard: {
@@ -1332,7 +1708,7 @@ const styles = StyleSheet.create({
   },
   repeatPickerCustomTitle: {
     fontSize: 16,
-    fontFamily: 'DMSans-Bold',
+    fontFamily: 'BricolageGrotesque-Bold',
     color: '#2F00FF',
   },
   repeatPickerCustomTitleSelected: {
@@ -1340,7 +1716,7 @@ const styles = StyleSheet.create({
   },
   repeatPickerCustomSubtitle: {
     fontSize: 13,
-    fontFamily: 'DMSans-Regular',
+    fontFamily: 'BricolageGrotesque-Regular',
     color: 'rgba(47, 0, 255, 0.6)',
   },
   repeatPickerCustomSubtitleSelected: {
@@ -1359,7 +1735,7 @@ const styles = StyleSheet.create({
   },
   notesInput: {
     fontSize: 16,
-    fontFamily: 'DMSans-Regular',
+    fontFamily: 'BricolageGrotesque-Regular',
     color: '#121018',
     minHeight: 120,
     padding: 0,
@@ -1382,7 +1758,7 @@ const styles = StyleSheet.create({
   },
   priorityText: {
     fontSize: 16,
-    fontFamily: 'DMSans-Bold',
+    fontFamily: 'BricolageGrotesque-Bold',
     color: '#121018',
   },
   toggle: {
@@ -1431,24 +1807,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    // 3D effect with cyan glow
-    shadowColor: '#00FFFF',
-    shadowOpacity: 0.35,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 8,
-    // Cyan outline
-    borderWidth: 1.5,
-    borderColor: 'rgba(0, 255, 255, 0.3)',
-    borderBottomWidth: 3,
-    borderBottomColor: 'rgba(0, 200, 200, 0.4)',
   },
   saveButtonDisabled: {
     backgroundColor: '#a5a5a5',
   },
   saveButtonText: {
     fontSize: 16,
-    fontFamily: 'DMSans-Bold',
+    fontFamily: 'BricolageGrotesque-Bold',
     color: '#ffffff',
   },
   modalOverlay: {
@@ -1466,15 +1831,6 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     paddingTop: 16,
     maxHeight: '60%',
-    // 3D shadow effect
-    shadowColor: '#00FFFF',
-    shadowOpacity: 0.15,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: -8 },
-    elevation: 10,
-    // Cyan outline at top
-    borderTopWidth: 2,
-    borderTopColor: 'rgba(0, 255, 255, 0.2)',
   },
   pickerHeader: {
     flexDirection: 'row',
@@ -1487,12 +1843,12 @@ const styles = StyleSheet.create({
   },
   pickerTitle: {
     fontSize: 18,
-    fontFamily: 'DMSans-Bold',
+    fontFamily: 'BricolageGrotesque-Bold',
     color: '#121018',
   },
   pickerCancel: {
     fontSize: 16,
-    fontFamily: 'DMSans-Regular',
+    fontFamily: 'BricolageGrotesque-Regular',
     color: '#888888',
   },
   pickerScroll: {
@@ -1507,12 +1863,12 @@ const styles = StyleSheet.create({
   },
   pickerOptionText: {
     fontSize: 16,
-    fontFamily: 'DMSans-Regular',
+    fontFamily: 'BricolageGrotesque-Regular',
     color: '#121018',
     textAlign: 'center',
   },
   pickerOptionTextSelected: {
-    fontFamily: 'DMSans-Bold',
+    fontFamily: 'BricolageGrotesque-Bold',
     color: '#2F00FF',
   },
   pickerConfirm: {
@@ -1522,21 +1878,244 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: 16,
     alignItems: 'center',
-    // 3D effect with cyan glow
-    shadowColor: '#00FFFF',
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 6,
-    // Cyan outline
-    borderWidth: 1.5,
-    borderColor: 'rgba(0, 255, 255, 0.3)',
-    borderBottomWidth: 2.5,
-    borderBottomColor: 'rgba(0, 200, 200, 0.35)',
   },
   pickerConfirmText: {
     fontSize: 16,
-    fontFamily: 'DMSans-Bold',
+    fontFamily: 'BricolageGrotesque-Bold',
     color: '#ffffff',
+  },
+  // Voice Overlay Styles
+  voiceOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 200,
+  },
+  voiceGradientBg: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#0a0a0f',
+    opacity: 0.95,
+  },
+  voiceOverlayContent: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+  },
+  voiceCloseButton: {
+    position: 'absolute',
+    top: 60,
+    right: 24,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  voiceStatusBadge: {
+    position: 'absolute',
+    top: 80,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(47, 0, 255, 0.15)',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(47, 0, 255, 0.3)',
+  },
+  voiceStatusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#2F00FF',
+  },
+  voiceStatusText: {
+    fontSize: 13,
+    fontFamily: 'BricolageGrotesque-Bold',
+    color: '#ffffff',
+    letterSpacing: 0.5,
+  },
+  voiceOrbContainer: {
+    width: 280,
+    height: 280,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 40,
+  },
+  voiceOrbRing1: {
+    position: 'absolute',
+    width: 280,
+    height: 280,
+    borderRadius: 140,
+    borderWidth: 3,
+    borderColor: '#ff0002',
+    borderStyle: 'solid',
+  },
+  voiceOrbRing2: {
+    position: 'absolute',
+    width: 260,
+    height: 260,
+    borderRadius: 130,
+    borderWidth: 3,
+    borderColor: '#3b82f6',
+    borderStyle: 'solid',
+  },
+  voiceOrbOuterGlow: {
+    position: 'absolute',
+    width: 240,
+    height: 240,
+    borderRadius: 120,
+    backgroundColor: 'rgba(47, 0, 255, 0.3)',
+    shadowColor: '#2F00FF',
+    shadowOpacity: 0.6,
+    shadowRadius: 50,
+  },
+  voiceOrbMiddle: {
+    position: 'absolute',
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    backgroundColor: 'rgba(47, 0, 255, 0.5)',
+  },
+  voiceOrbCore: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: '#2F00FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#2F00FF',
+    shadowOpacity: 0.8,
+    shadowRadius: 40,
+    elevation: 10,
+  },
+  voiceStatusTag: {
+    fontSize: 11,
+    letterSpacing: 3,
+    textTransform: 'uppercase',
+    fontFamily: 'BricolageGrotesque-Bold',
+    color: 'rgba(47, 0, 255, 0.7)',
+    marginBottom: 8,
+  },
+  voiceDurationContainer: {
+    marginTop: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(47, 0, 255, 0.15)',
+    borderRadius: 16,
+  },
+  voiceDuration: {
+    fontSize: 36,
+    fontFamily: 'BricolageGrotesque-Bold',
+    color: '#ffffff',
+    letterSpacing: 2,
+  },
+  voiceTranscriptWrapper: {
+    marginTop: 24,
+    width: '100%',
+    alignItems: 'center',
+  },
+  voiceTranscriptContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 20,
+    padding: 24,
+    maxWidth: '100%',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  voiceTranscript: {
+    fontSize: 16,
+    fontFamily: 'BricolageGrotesque-Regular',
+    color: '#ffffff',
+    textAlign: 'center',
+    lineHeight: 24,
+    fontStyle: 'italic',
+  },
+  voiceSuccessIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    borderRadius: 16,
+  },
+  voiceSuccessText: {
+    fontSize: 14,
+    fontFamily: 'BricolageGrotesque-Bold',
+    color: '#10b981',
+  },
+  voiceErrorContainer: {
+    marginTop: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    backgroundColor: 'rgba(220, 38, 38, 0.15)',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(220, 38, 38, 0.3)',
+  },
+  voiceError: {
+    fontSize: 14,
+    fontFamily: 'BricolageGrotesque-Bold',
+    color: '#ff6b6b',
+    textAlign: 'center',
+  },
+  voiceControls: {
+    marginTop: 40,
+    alignItems: 'center',
+  },
+  voiceStopButton: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#2F00FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#2F00FF',
+    shadowOpacity: 0.6,
+    shadowRadius: 30,
+    elevation: 10,
+    borderWidth: 3,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  voiceStopIcon: {
+    width: 28,
+    height: 28,
+    backgroundColor: '#ffffff',
+    borderRadius: 6,
+  },
+  voiceProcessingIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    backgroundColor: 'rgba(47, 0, 255, 0.15)',
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(47, 0, 255, 0.3)',
+  },
+  voiceProcessingDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#2F00FF',
+  },
+  voiceProcessingText: {
+    fontSize: 15,
+    fontFamily: 'BricolageGrotesque-Bold',
+    color: '#ffffff',
+  },
+  voiceHint: {
+    marginTop: 20,
+    fontSize: 12,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    fontFamily: 'BricolageGrotesque-Bold',
+    color: 'rgba(255, 255, 255, 0.4)',
   },
 });

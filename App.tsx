@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { View } from 'react-native';
+import { AppState, View } from 'react-native';
 import { useFonts } from 'expo-font';
 import * as Notifications from 'expo-notifications';
 import { supabase } from './lib/supabase';
 import {
   initializeNotifications,
   setupNotificationResponseHandler,
+  setupNotificationCategory,
+  setupNotificationReceivedHandler,
+  syncLocalReminderSchedules,
 } from './lib/notifications';
 import HomeScreen from './screens/HomeScreen';
 import OnboardingScreen from './screens/OnboardingScreen';
@@ -14,16 +17,19 @@ type Session = Awaited<ReturnType<typeof supabase.auth.getSession>>['data']['ses
 
 export default function App() {
   const [fontsLoaded] = useFonts({
-    'DMSans-Regular': require('./assets/fonts/DMSans/DMSans-Regular.ttf'),
-    'DMSans-Bold': require('./assets/fonts/DMSans/DMSans-Bold.ttf'),
-    'DMSans-Black': require('./assets/fonts/DMSans/DMSans-Black.ttf'),
-    'BBHHegarty-Regular': require('./assets/fonts/BBH-Hegarty/BBHHegarty-Regular.ttf'),
+    'BricolageGrotesque-Regular': require('./assets/fonts/Bricolage-Grotesque/BricolageGrotesque-Regular.ttf'),
+    'BricolageGrotesque-Medium': require('./assets/fonts/Bricolage-Grotesque/BricolageGrotesque-Medium.ttf'),
+    'BricolageGrotesque-SemiBold': require('./assets/fonts/Bricolage-Grotesque/BricolageGrotesque-SemiBold.ttf'),
+    'BricolageGrotesque-Bold': require('./assets/fonts/Bricolage-Grotesque/BricolageGrotesque-Bold.ttf'),
+    'BricolageGrotesque-ExtraBold': require('./assets/fonts/Bricolage-Grotesque/BricolageGrotesque-ExtraBold.ttf'),
+    'BricolageGrotesque-Light': require('./assets/fonts/Bricolage-Grotesque/BricolageGrotesque-Light.ttf'),
   });
 
   const [session, setSession] = useState<Session | null>(null);
   const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [skippedOnboarding, setSkippedOnboarding] = useState(false);
   const notificationResponseListener = useRef<Notifications.EventSubscription | null>(null);
+  const notificationReceivedListener = useRef<Notifications.EventSubscription | null>(null);
 
   // Auth session effect
   useEffect(() => {
@@ -52,20 +58,43 @@ export default function App() {
   useEffect(() => {
     if (!session) return;
 
-    initializeNotifications().catch((error) => {
-      console.error('Failed to initialize notifications:', error);
-    });
+    const initNotifications = async () => {
+      try {
+        await initializeNotifications();
 
-    // Set up handler for when user taps on a notification
-    notificationResponseListener.current = setupNotificationResponseHandler((reminderId) => {
-      // TODO: Navigate to reminder detail or handle the tap
-      console.log('Notification tapped for reminder:', reminderId);
+        await setupNotificationCategory();
+        console.log('Notification category configured successfully');
+
+        await syncLocalReminderSchedules();
+
+        notificationReceivedListener.current = setupNotificationReceivedHandler((notification) => {
+          console.log('Foreground notification received:', notification.request.content.data);
+        });
+
+        notificationResponseListener.current = setupNotificationResponseHandler((reminderId) => {
+          console.log('Notification tapped for reminder:', reminderId);
+        });
+      } catch (error) {
+        console.error('Failed to initialize notifications:', error);
+      }
+    };
+
+    initNotifications();
+
+    const appStateSubscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        void syncLocalReminderSchedules();
+      }
     });
 
     return () => {
       if (notificationResponseListener.current) {
         notificationResponseListener.current.remove();
       }
+      if (notificationReceivedListener.current) {
+        notificationReceivedListener.current.remove();
+      }
+      appStateSubscription.remove();
     };
   }, [session]);
 
