@@ -57,3 +57,12 @@ assets/fonts/DMSans/*.ttf
 # generated native folders
 /ios
 /android
+
+# Build artifacts
+*.apk
+*.aab
+*.ipa
+build-*.apk
+build-*.aab
+*.app
+*.dSYM.zip
