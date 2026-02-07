@@ -1,3 +1,4 @@
+import './global.css';
 import { useEffect, useRef, useState } from 'react';
 import { AppState, View } from 'react-native';
 import { useFonts } from 'expo-font';
@@ -10,8 +11,10 @@ import {
   setupNotificationReceivedHandler,
   syncLocalReminderSchedules,
 } from './lib/notifications';
+import { ThemeProvider } from './contexts/ThemeContext';
 import HomeScreen from './screens/HomeScreen';
 import OnboardingScreen from './screens/OnboardingScreen';
+import AuthScreen from './screens/AuthScreen';
 
 type Session = Awaited<ReturnType<typeof supabase.auth.getSession>>['data']['session'];
 
@@ -27,9 +30,16 @@ export default function App() {
 
   const [session, setSession] = useState<Session | null>(null);
   const [isCheckingSession, setIsCheckingSession] = useState(true);
-  const [skippedOnboarding, setSkippedOnboarding] = useState(false);
+  const [showAuth, setShowAuth] = useState(false);
   const notificationResponseListener = useRef<Notifications.EventSubscription | null>(null);
   const notificationReceivedListener = useRef<Notifications.EventSubscription | null>(null);
+
+  // Preload native modules to prevent reload on first use
+  useEffect(() => {
+    // Preload expo-audio and expo-file-system modules
+    import('expo-audio').catch(() => {});
+    import('expo-file-system').catch(() => {});
+  }, []);
 
   // Auth session effect
   useEffect(() => {
@@ -102,9 +112,15 @@ export default function App() {
     return <View />;
   }
 
-  if (session || skippedOnboarding) {
-    return <HomeScreen />;
-  }
-
-  return <OnboardingScreen onSkip={() => setSkippedOnboarding(true)} />;
+  return (
+    <ThemeProvider>
+      {session ? (
+        <HomeScreen />
+      ) : showAuth ? (
+        <AuthScreen onBack={() => setShowAuth(false)} />
+      ) : (
+        <OnboardingScreen onSkip={() => setShowAuth(true)} />
+      )}
+    </ThemeProvider>
+  );
 }

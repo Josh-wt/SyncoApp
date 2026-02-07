@@ -3,7 +3,8 @@
   "compilerOptions": {
     "strict": true,
     "jsx": "react-native",
-    "types": ["react", "react-native"]
+    "types": ["react", "react-native", "nativewind/types"]
   },
+  "include": ["**/*.ts", "**/*.tsx", "nativewind-env.d.ts"],
   "exclude": ["supabase"]
 }

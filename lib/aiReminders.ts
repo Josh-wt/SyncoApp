@@ -22,8 +22,10 @@ interface VoiceConversationResult {
 interface VoiceReminderResult {
   type: 'reminder';
   transcript: string;
-  reminder: CreateReminderInput;
-  recurringRule: CreateRecurringRuleInput | null;
+  reminders: Array<{
+    reminder: CreateReminderInput;
+    recurringRule: CreateRecurringRuleInput | null;
+  }>;
 }
 
 export type VoiceProcessResult = VoiceConversationResult | VoiceReminderResult;
@@ -170,8 +172,25 @@ export async function parseReminderFromVoice(
   mimeType: string
 ): Promise<VoiceProcessResult> {
   try {
+    // Get the current session to ensure we have auth token
+    const { data: { session } } = await supabase.auth.getSession();
+
+    if (!session) {
+      throw new Error('You must be logged in to use voice reminders');
+    }
+
+    // Get user's timezone offset in minutes
+    const timezoneOffset = new Date().getTimezoneOffset();
+
     const { data, error } = await supabase.functions.invoke('voice-to-reminder', {
-      body: { audio: audioBase64, mimeType },
+      body: {
+        audio: audioBase64,
+        mimeType,
+        timezoneOffset, // Send user's timezone offset
+      },
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
     });
 
     if (error) {
@@ -195,37 +214,42 @@ export async function parseReminderFromVoice(
       };
     }
 
-    // Handle reminder creation response
-    if (!data.reminder) {
+    // Handle reminder creation response - support both single and multiple reminders
+    const remindersArray = data.reminders || (data.reminder ? [data.reminder] : null);
+
+    if (!remindersArray || !Array.isArray(remindersArray) || remindersArray.length === 0) {
       throw new Error('Invalid reminder response from voice processing');
     }
 
-    // Ensure the reminder has all required fields with defaults
-    const reminder: CreateReminderInput = {
-      title: data.reminder.title || 'Reminder',
-      scheduled_time: data.reminder.scheduled_time,
-      description: data.reminder.description || data.transcript,
-      is_priority: data.reminder.is_priority || false,
-      notify_before_minutes: data.reminder.notify_before_minutes ?? 0,
-    };
-
-    // Parse recurring rule if present
-    let recurringRule: CreateRecurringRuleInput | null = null;
-    if (data.reminder.recurring_rule) {
-      const rule = data.reminder.recurring_rule;
-      recurringRule = {
-        name: rule.name || 'Custom recurring',
-        frequency: rule.frequency || 1,
-        frequency_unit: rule.frequency_unit || 'days',
-        selected_days: rule.selected_days || [],
+    // Process each reminder
+    const processedReminders = remindersArray.map((reminderData: any) => {
+      const reminder: CreateReminderInput = {
+        title: reminderData.title || 'Reminder',
+        scheduled_time: reminderData.scheduled_time,
+        description: reminderData.description || data.transcript,
+        is_priority: reminderData.is_priority || false,
+        notify_before_minutes: reminderData.notify_before_minutes ?? 0,
       };
-    }
+
+      // Parse recurring rule if present
+      let recurringRule: CreateRecurringRuleInput | null = null;
+      if (reminderData.recurring_rule) {
+        const rule = reminderData.recurring_rule;
+        recurringRule = {
+          name: rule.name || 'Custom recurring',
+          frequency: rule.frequency || 1,
+          frequency_unit: rule.frequency_unit || 'days',
+          selected_days: rule.selected_days || [],
+        };
+      }
+
+      return { reminder, recurringRule };
+    });
 
     return {
       type: 'reminder',
       transcript: data.transcript,
-      reminder,
-      recurringRule,
+      reminders: processedReminders,
     };
   } catch (err) {
     // If voice processing fails, throw error to be handled by caller

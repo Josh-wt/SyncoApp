@@ -46,8 +46,8 @@ export function useReminders(): UseRemindersReturn {
       // Process reminders to compute their status based on current time
       const processedReminders = processRemindersStatus(upcomingReminders);
 
-      // Limit to 7 upcoming reminders for the homepage
-      const limitedReminders = processedReminders.slice(0, 7);
+      // Limit to 6 upcoming reminders for the homepage
+      const limitedReminders = processedReminders.slice(0, 6);
 
       setReminders(limitedReminders);
       setPriorityCount(priority);

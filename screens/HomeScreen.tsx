@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Animated, Dimensions, ScrollView, StyleSheet, Text, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const SCREEN_WIDTH = Dimensions.get('window').width;
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import QuickGlanceCard from '../components/QuickGlanceCard';
 import Timeline from '../components/Timeline';
@@ -10,7 +12,7 @@ import { useReminders } from '../hooks/useReminders';
 import ManualCreateScreen from './ManualCreateScreen';
 import AICreateScreen from './AICreateScreen';
 import NotificationsScreen from './NotificationsScreen';
-import TimelineScreen from './TimelineScreen';
+import TimelineScreenV2 from './TimelineScreenV2';
 import SettingsScreen from './SettingsScreen';
 import { CreateReminderInput } from '../lib/types';
 
@@ -23,6 +25,9 @@ export default function HomeScreen() {
   const { reminders, isLoading, error, addReminder } = useReminders();
   const [showFirstTimeHint, setShowFirstTimeHint] = useState(false);
   const [currentScreen, setCurrentScreen] = useState<Screen>('home');
+
+  // Animation values for smooth screen transitions
+  const slideAnim = useRef(new Animated.Value(0)).current;
 
   // Check if this is the user's first time
   useEffect(() => {
@@ -50,12 +55,15 @@ export default function HomeScreen() {
   }, []);
 
   const handleCreateReminder = useCallback((mode: CreationMode) => {
-    if (mode === 'ai') {
-      setCurrentScreen('ai-create');
-    } else {
-      setCurrentScreen('manual-create');
-    }
-  }, []);
+    const screen = mode === 'ai' ? 'ai-create' : 'manual-create';
+    setCurrentScreen(screen);
+    Animated.spring(slideAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      tension: 65,
+      friction: 10,
+    }).start();
+  }, [slideAnim]);
 
   const handleSaveReminder = useCallback(async (input: CreateReminderInput) => {
     try {
@@ -67,8 +75,15 @@ export default function HomeScreen() {
   }, [addReminder]);
 
   const handleBackToHome = useCallback(() => {
-    setCurrentScreen('home');
-  }, []);
+    Animated.spring(slideAnim, {
+      toValue: 0,
+      useNativeDriver: true,
+      tension: 65,
+      friction: 10,
+    }).start(() => {
+      setCurrentScreen('home');
+    });
+  }, [slideAnim]);
 
   const handleTabPress = useCallback((tab: TabName) => {
     if (tab === 'dashboard') {
@@ -82,24 +97,7 @@ export default function HomeScreen() {
     }
   }, []);
 
-  if (currentScreen === 'manual-create') {
-    return (
-      <ManualCreateScreen
-        onBack={handleBackToHome}
-        onSave={handleSaveReminder}
-      />
-    );
-  }
-
-  if (currentScreen === 'ai-create') {
-    return (
-      <AICreateScreen
-        onBack={handleBackToHome}
-        onSave={handleSaveReminder}
-      />
-    );
-  }
-
+  // Render separate screens for timeline, notifications, settings
   if (currentScreen === 'notifications') {
     return (
       <NotificationsScreen
@@ -112,7 +110,7 @@ export default function HomeScreen() {
 
   if (currentScreen === 'timeline') {
     return (
-      <TimelineScreen
+      <TimelineScreenV2
         onBack={handleBackToHome}
         onCreateReminder={handleCreateReminder}
         onTabPress={handleTabPress}
@@ -133,13 +131,35 @@ export default function HomeScreen() {
     );
   }
 
+  const translateX = slideAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -SCREEN_WIDTH],
+  });
+
+  const createScreenTranslateX = slideAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [SCREEN_WIDTH, 0],
+  });
+
+  const showCreateScreen = currentScreen === 'manual-create' || currentScreen === 'ai-create';
+
   return (
     <View style={styles.root}>
-      <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 160 }]}
-        showsVerticalScrollIndicator={false}
+      {/* Home Screen - slides left when create screen opens */}
+      <Animated.View
+        style={[
+          styles.screenContainer,
+          {
+            transform: [{ translateX }],
+          },
+        ]}
+        pointerEvents={showCreateScreen ? 'none' : 'auto'}
       >
-        <QuickGlanceCard />
+        <ScrollView
+          contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 160 }]}
+          showsVerticalScrollIndicator={false}
+        >
+          <QuickGlanceCard />
 
           {isLoading ? (
             <View style={styles.loadingContainer}>
@@ -155,17 +175,52 @@ export default function HomeScreen() {
               <Text style={styles.emptySubtitle}>Tap + to add your first reminder</Text>
             </View>
           ) : (
-            <Timeline reminders={reminders} />
+            <Timeline reminders={reminders.slice(0, 5)} />
           )}
-      </ScrollView>
+        </ScrollView>
 
-      <BottomNavBar
-        activeTab="dashboard"
-        showFirstTimeHint={showFirstTimeHint}
-        onDismissHint={handleDismissHint}
-        onCreateReminder={handleCreateReminder}
-        onTabPress={handleTabPress}
-      />
+        <BottomNavBar
+          activeTab="dashboard"
+          showFirstTimeHint={showFirstTimeHint}
+          onDismissHint={handleDismissHint}
+          onCreateReminder={handleCreateReminder}
+          onTabPress={handleTabPress}
+        />
+      </Animated.View>
+
+      {/* Manual Create Screen - pre-mounted and slides in from right */}
+      <Animated.View
+        style={[
+          styles.createScreenContainer,
+          {
+            transform: [{ translateX: createScreenTranslateX }],
+            opacity: currentScreen === 'manual-create' ? 1 : 0,
+          },
+        ]}
+        pointerEvents={currentScreen === 'manual-create' ? 'auto' : 'none'}
+      >
+        <ManualCreateScreen
+          onBack={handleBackToHome}
+          onSave={handleSaveReminder}
+        />
+      </Animated.View>
+
+      {/* AI Create Screen - pre-mounted and slides in from right */}
+      <Animated.View
+        style={[
+          styles.createScreenContainer,
+          {
+            transform: [{ translateX: createScreenTranslateX }],
+            opacity: currentScreen === 'ai-create' ? 1 : 0,
+          },
+        ]}
+        pointerEvents={currentScreen === 'ai-create' ? 'auto' : 'none'}
+      >
+        <AICreateScreen
+          onBack={handleBackToHome}
+          onSave={handleSaveReminder}
+        />
+      </Animated.View>
     </View>
   );
 }
@@ -173,6 +228,15 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+    backgroundColor: '#FFFFFF',
+    overflow: 'hidden',
+  },
+  screenContainer: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#FFFFFF',
+  },
+  createScreenContainer: {
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: '#FFFFFF',
   },
   content: {

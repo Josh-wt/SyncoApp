@@ -29,7 +29,15 @@ function AnimatedFAB({ onPress }: { onPress: () => void }) {
   };
 
   return (
-    <Pressable onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
+    <Pressable
+      onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      accessible={true}
+      accessibilityRole="button"
+      accessibilityLabel="Create new reminder"
+      accessibilityHint="Opens the reminder creation screen"
+    >
       <Animated.View
         style={[
           styles.fabContainer,
@@ -47,10 +55,12 @@ function AnimatedNavIcon({
   onPress,
   isActive,
   children,
+  label,
 }: {
   onPress: () => void;
   isActive: boolean;
   children: React.ReactNode;
+  label: string;
 }) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
@@ -73,7 +83,16 @@ function AnimatedNavIcon({
   };
 
   return (
-    <Pressable onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
+    <Pressable
+      onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      accessible={true}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ selected: isActive }}
+      accessibilityHint={`Navigate to ${label} screen`}
+    >
       <Animated.View
         style={[
           styles.navIcon,
@@ -190,27 +209,27 @@ export default function BottomNavBar({
                 <Path d="M-5 12 H118 C123 12 127 14 129 18 C134 28 145 58 170 58 C195 58 206 28 211 18 C213 14 217 12 222 12 H345 A32 32 0 0 1 345 76 H-5 A32 32 0 0 1 -5 12 Z" />
               </ClipPath>
             </Defs>
-            <Rect x="-60" y="0" width="460" height="88" fill="#ffffff" clipPath="url(#navClip)" />
+            <Rect x="-60" y="0" width="460" height="88" fill="#2F00FF" clipPath="url(#navClip)" />
           </Svg>
           <View style={styles.navIconsOverlay}>
             <View style={styles.navGroup}>
-              <AnimatedNavIcon onPress={() => onTabPress?.('dashboard')} isActive={activeTab === 'dashboard'}>
+              <AnimatedNavIcon onPress={() => onTabPress?.('dashboard')} isActive={activeTab === 'dashboard'} label="Dashboard">
                 <MaterialIcons
                   name="dashboard"
                   size={26}
-                  color={activeTab === 'dashboard' ? '#2F00FF' : '#d1d5db'}
+                  color="#FFFFFF"
                 />
               </AnimatedNavIcon>
-              <AnimatedNavIcon onPress={() => onTabPress?.('calendar')} isActive={activeTab === 'calendar'}>
-                <TimelineNavIcon color={activeTab === 'calendar' ? '#2F00FF' : '#d1d5db'} />
+              <AnimatedNavIcon onPress={() => onTabPress?.('calendar')} isActive={activeTab === 'calendar'} label="Timeline">
+                <TimelineNavIcon color="#FFFFFF" />
               </AnimatedNavIcon>
             </View>
             <View style={styles.navGroup}>
-              <AnimatedNavIcon onPress={() => onTabPress?.('notifications')} isActive={activeTab === 'notifications'}>
-                <BellNavIcon color={activeTab === 'notifications' ? '#2F00FF' : '#d1d5db'} />
+              <AnimatedNavIcon onPress={() => onTabPress?.('notifications')} isActive={activeTab === 'notifications'} label="Notifications">
+                <BellNavIcon color="#FFFFFF" />
               </AnimatedNavIcon>
-              <AnimatedNavIcon onPress={() => onTabPress?.('settings')} isActive={activeTab === 'settings'}>
-                <AccountSettingsIcon color={activeTab === 'settings' ? '#2F00FF' : '#d1d5db'} />
+              <AnimatedNavIcon onPress={() => onTabPress?.('settings')} isActive={activeTab === 'settings'} label="Settings">
+                <AccountSettingsIcon color="#FFFFFF" />
               </AnimatedNavIcon>
             </View>
           </View>
@@ -271,7 +290,7 @@ const styles = StyleSheet.create({
     borderRadius: 22,
   },
   navIconActive: {
-    backgroundColor: 'rgba(47, 0, 255, 0.08)',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
   },
   fabContainer: {
     width: 68,
@@ -300,11 +319,11 @@ const styles = StyleSheet.create({
     zIndex: 150,
   },
   hintBubble: {
-    backgroundColor: '#2F00FF',
+    backgroundColor: '#D6C6F5',
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 20,
-    shadowColor: '#2F00FF',
+    shadowColor: '#D6C6F5',
     shadowOpacity: 0.3,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 },
@@ -322,7 +341,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 8,
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
-    borderTopColor: '#2F00FF',
+    borderTopColor: '#D6C6F5',
     marginTop: -1,
   },
 });

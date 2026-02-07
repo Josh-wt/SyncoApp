@@ -11,7 +11,7 @@ interface TimelineProps {
 export default function Timeline({ reminders, onReminderPress, onViewAllPress }: TimelineProps) {
   // Calculate the height of the active rail based on current/completed items
   const currentIndex = reminders.findIndex((r) => r.status === 'current');
-  const activeRailHeight = currentIndex >= 0 ? (currentIndex + 1) * 56 + 60 : 0;
+  const activeRailHeight = currentIndex >= 0 ? currentIndex * 56 + 30 : 0;
 
   return (
     <>
@@ -59,7 +59,7 @@ const styles = StyleSheet.create({
     position: 'relative',
     paddingLeft: 24,
     paddingBottom: 24,
-    minHeight: 300,
+    minHeight: 180,
   },
   timelineRailMuted: {
     position: 'absolute',
@@ -81,5 +81,40 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 0 },
+  },
+  currentTimeIndicator: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  currentTimeDot: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#2F00FF',
+    borderWidth: 3,
+    borderColor: '#ffffff',
+    marginLeft: 0,
+    shadowColor: '#2F00FF',
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  currentTimeLine: {
+    flex: 1,
+    height: 2,
+    backgroundColor: '#2F00FF',
+    opacity: 0.3,
+    marginLeft: 8,
+  },
+  currentTimeLabel: {
+    fontSize: 10,
+    fontFamily: 'BricolageGrotesque-Bold',
+    color: '#2F00FF',
+    letterSpacing: 1.2,
+    marginLeft: 8,
   },
 });

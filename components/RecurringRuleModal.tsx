@@ -8,6 +8,8 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import {
   AutoAwesomeIcon,
   CloseIcon,
@@ -306,9 +308,32 @@ export default function RecurringRuleModal({
 
           {/* Save Button */}
           <AnimatedModalButton onPress={handleSave} style={styles.saveButton}>
-            <Text style={styles.saveButtonText}>
-              {initialRule ? 'Update' : 'Done'}
-            </Text>
+            <BlurView intensity={30} tint="light" style={styles.saveButtonBlur}>
+              <LinearGradient
+                colors={['#2F00FF', '#2F00FF', '#2F00FF']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+                style={styles.saveButtonGradient}
+              >
+                {/* Top Highlight */}
+                <LinearGradient
+                  colors={['rgba(255, 255, 255, 0.4)', 'rgba(255, 255, 255, 0)']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 0, y: 0.5 }}
+                  style={styles.highlightTop}
+                />
+                {/* Bottom Highlight */}
+                <LinearGradient
+                  colors={['rgba(255, 255, 255, 0)', 'rgba(255, 255, 255, 0.4)']}
+                  start={{ x: 0, y: 0.5 }}
+                  end={{ x: 0, y: 1 }}
+                  style={styles.highlightBottom}
+                />
+                <Text style={styles.saveButtonText}>
+                  {initialRule ? 'Update' : 'Done'}
+                </Text>
+              </LinearGradient>
+            </BlurView>
           </AnimatedModalButton>
         </View>
 
@@ -579,15 +604,45 @@ const styles = StyleSheet.create({
 
   // Save Button
   saveButton: {
-    backgroundColor: '#2F00FF',
+    position: 'relative',
+    borderRadius: 100,
+  },
+  saveButtonBlur: {
+    borderRadius: 100,
+    overflow: 'hidden',
+    borderWidth: 0.5,
+    borderColor: 'rgba(0, 0, 0, 0.6)',
+  },
+  saveButtonGradient: {
     paddingVertical: 16,
-    borderRadius: 14,
+    paddingHorizontal: 32,
     alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 100,
+    position: 'relative',
+  },
+  highlightTop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: '50%',
+    borderRadius: 100,
+  },
+  highlightBottom: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: '50%',
+    borderRadius: 100,
   },
   saveButtonText: {
-    fontSize: 15,
+    fontSize: 16,
     fontFamily: 'BricolageGrotesque-Bold',
     color: '#ffffff',
+    letterSpacing: 0.5,
+    zIndex: 1,
   },
 
   // Picker Modals

@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.91.1';
 interface VoiceRequest {
   audio: string; // base64 encoded audio
   mimeType?: string; // audio/wav, audio/webm, etc.
+  timezoneOffset?: number; // User's timezone offset in minutes (e.g., -480 for UTC+8)
 }
 
 const OPENAI_API_URL = 'https://api.openai.com/v1';
@@ -167,56 +168,60 @@ Be conversational and warm, but don't be overly verbose.`;
   return content.trim();
 }
 
-async function parseReminderFromTranscript(transcript: string, apiKey: string): Promise<object> {
-  const now = new Date();
+async function parseReminderFromTranscript(transcript: string, apiKey: string, timezoneOffset: number = 0): Promise<object> {
+  // Get user's local time - timezoneOffset is inverted (negative = UTC+)
+  const nowUTC = new Date();
+  const localTime = new Date(nowUTC.getTime() - timezoneOffset * 60000);
 
-  const systemPrompt = `You convert natural language into JSON for a reminder app.
+  // Simple timezone string formatting
+  const offsetHours = Math.floor(Math.abs(timezoneOffset) / 60);
+  const offsetMinutes = Math.abs(timezoneOffset) % 60;
+  const offsetSign = timezoneOffset <= 0 ? '+' : '-';
+  const timezone = `${offsetSign}${String(offsetHours).padStart(2, '0')}:${String(offsetMinutes).padStart(2, '0')}`;
 
-Output JSON with these keys:
-- title: A concise reminder title extracted from the user's speech
-- scheduled_time: Must be ISO 8601 format (e.g., "2024-01-15T14:00:00.000Z")
-- description: Optional additional context (ONE LINE ONLY - will appear in notifications); set to null if not given
-- is_priority: Boolean, true if user indicates urgency/importance
-- notify_before_minutes: Integer (0, 5, 15, 30, or 60). Default to 0 unless specified
-- recurring_rule: Object for recurring reminders, or null if not recurring. Structure:
-  {
-    "name": "Human-readable rule name (e.g., 'Every weekday at 9am', 'Every hour', 'Every 30 minutes')",
-    "frequency": Number (1-60 for minutes, 1-24 for hours, 1-12 for other units),
-    "frequency_unit": "minutes" | "hours" | "days" | "weeks" | "months" | "years",
-    "selected_days": Array of day abbreviations for weekly rules only: ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] (empty array for non-weekly)
-  }
+  const systemPrompt = `Convert voice input to reminder JSON.
 
-IMPORTANT: Keep description to ONE LINE - it will appear in push notifications.
+TIMEZONE: ${timezone}
+CURRENT TIME: ${localTime.toISOString().slice(0, 19)}${timezone}
+CURRENT DATE: ${localTime.getFullYear()}-${String(localTime.getMonth() + 1).padStart(2, '0')}-${String(localTime.getDate()).padStart(2, '0')}
 
-Guidelines:
-- If user says "tomorrow", calculate the next day from current_time
-- If user says a day like "Monday", find the next occurrence of that day
-- If no specific time is given, default to 10 minutes from current_time
-- Extract the core action/task as the title, removing filler words like "remind me to", "I need to", etc.
-- If user mentions "urgent", "important", "priority", set is_priority to true
+OUTPUT - Array of reminders:
+{
+  "reminders": [
+    {
+      "title": "Brief action (2-6 words max)",
+      "scheduled_time": "YYYY-MM-DDTHH:mm:ss${timezone}",
+      "description": "Short note with context (5-15 words). ALWAYS create a note - never leave null",
+      "is_priority": false,
+      "notify_before_minutes": 0,
+      "recurring_rule": null
+    }
+  ]
+}
 
-Recurring patterns to detect:
-- "every 30 minutes" / "half hourly" / "every half hour" → frequency: 30, frequency_unit: "minutes", selected_days: []
-- "every hour" / "hourly" / "every 1 hour" → frequency: 1, frequency_unit: "hours", selected_days: []
-- "every 2 hours" → frequency: 2, frequency_unit: "hours", selected_days: []
-- "every day" / "daily" → frequency: 1, frequency_unit: "days", selected_days: []
-- "every week" / "weekly" → frequency: 1, frequency_unit: "weeks", selected_days: []
-- "every Monday" → frequency: 1, frequency_unit: "weeks", selected_days: ["mon"]
-- "every Monday and Wednesday" → frequency: 1, frequency_unit: "weeks", selected_days: ["mon", "wed"]
-- "every weekday" → frequency: 1, frequency_unit: "weeks", selected_days: ["mon", "tue", "wed", "thu", "fri"]
-- "every weekend" → frequency: 1, frequency_unit: "weeks", selected_days: ["sat", "sun"]
-- "every month" / "monthly" → frequency: 1, frequency_unit: "months", selected_days: []
-- "every 2 weeks" / "biweekly" → frequency: 2, frequency_unit: "weeks", selected_days: []
-- "every year" / "yearly" / "annually" → frequency: 1, frequency_unit: "years", selected_days: []
+CRITICAL RULES:
+1. title = SHORT action (e.g., "Call mom", "Buy groceries")
+2. description = SHORT contextual note (e.g., "Check in about her appointment", "Get milk, bread, and eggs for dinner")
+3. ALWAYS create description - extract key context from user's words
+4. description should add useful context, NOT repeat the title
+5. scheduled_time ALWAYS uses ${timezone}
 
-If NO recurring pattern is mentioned, set recurring_rule to null.
+TIME RULES:
+- "today" = day ${String(localTime.getDate()).padStart(2, '0')}
+- "tomorrow" = day ${String(localTime.getDate() + 1).padStart(2, '0')}
+- "7pm" = 19:00:00
+- Format: ${localTime.getFullYear()}-MM-DDT19:00:00${timezone}
 
-Return ONLY valid JSON without markdown code blocks.`;
+EXAMPLES:
+"remind me to call mom tomorrow at 7pm to ask about her doctor appointment"
+→ { "title": "Call mom", "description": "Ask about doctor appointment", "scheduled_time": "${localTime.getFullYear()}-${String(localTime.getMonth() + 1).padStart(2, '0')}-${String(localTime.getDate() + 1).padStart(2, '0')}T19:00:00${timezone}" }
 
-  const userPrompt = JSON.stringify({
-    transcript: transcript.trim(),
-    current_time: now.toISOString(),
-  });
+"buy groceries at 3pm - need milk and bread"
+→ { "title": "Buy groceries", "description": "Get milk and bread", "scheduled_time": "${localTime.getFullYear()}-${String(localTime.getMonth() + 1).padStart(2, '0')}-${String(localTime.getDate()).padStart(2, '0')}T15:00:00${timezone}" }
+
+MULTIPLE: "call mom and buy groceries" = 2 separate reminders
+
+Return JSON only.`;
 
   const response = await fetch(`${OPENAI_API_URL}/chat/completions`, {
     method: 'POST',
@@ -229,7 +234,7 @@ Return ONLY valid JSON without markdown code blocks.`;
       temperature: 0.2,
       messages: [
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
+        { role: 'user', content: transcript.trim() },
       ],
     }),
   });
@@ -345,13 +350,13 @@ Deno.serve(async (req) => {
     const intent = await detectIntent(transcript, openaiKey);
 
     if (intent.isReminderRequest) {
-      // Step 3a: Parse transcript into reminder structure
-      const reminder = await parseReminderFromTranscript(transcript, openaiKey);
+      // Step 3a: Parse transcript into reminder structure(s)
+      const parsedData = await parseReminderFromTranscript(transcript, openaiKey, payload.timezoneOffset || 0);
 
       return new Response(JSON.stringify({
         type: 'reminder',
         transcript,
-        reminder,
+        reminders: parsedData.reminders || [parsedData], // Support both array and single object format
       }), {
         status: 200,
         headers: {

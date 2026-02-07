@@ -115,15 +115,75 @@ export const DAYS_OF_WEEK: { label: string; short: string; value: DayOfWeek }[] 
 
 // User preferences types
 export type SnoozeMode = 'text_input' | 'presets';
+export type ThemeMode = 'light' | 'dark' | 'system';
+export type FontSize = 'small' | 'medium' | 'large';
 
 export interface UserPreferences {
   id: string;
   user_id: string;
   snooze_mode: SnoozeMode;
+  // Notification preferences
+  notification_sound: boolean;
+  notification_vibration: boolean;
+  priority_notification_sound: boolean;
+  default_notify_before_minutes: number;
+  // Appearance preferences
+  theme: ThemeMode;
+  accent_color: string;
+  font_size: FontSize;
+  // Reminder preferences
+  auto_delete_completed: boolean;
+  auto_delete_days: number;
+  default_recurring_enabled: boolean;
+  // Advanced preferences
+  debug_mode: boolean;
+  analytics_enabled: boolean;
   created_at: string;
   updated_at: string;
 }
 
 export interface UpdateUserPreferencesInput {
   snooze_mode?: SnoozeMode;
+  // Notification preferences
+  notification_sound?: boolean;
+  notification_vibration?: boolean;
+  priority_notification_sound?: boolean;
+  default_notify_before_minutes?: number;
+  // Appearance preferences
+  theme?: ThemeMode;
+  accent_color?: string;
+  font_size?: FontSize;
+  // Reminder preferences
+  auto_delete_completed?: boolean;
+  auto_delete_days?: number;
+  default_recurring_enabled?: boolean;
+  // Advanced preferences
+  debug_mode?: boolean;
+  analytics_enabled?: boolean;
+}
+
+// Account codes and device sync types
+export interface AccountCode {
+  id: string;
+  user_id: string;
+  code: string;
+  expires_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DeviceSyncRecord {
+  id: string;
+  user_id: string;
+  account_code_id: string | null;
+  device_id: string;
+  device_name: string | null;
+  platform: string | null;
+  synced_at: string;
+}
+
+export interface DeviceInfo {
+  device_id: string;
+  device_name?: string;
+  platform?: string;
 }

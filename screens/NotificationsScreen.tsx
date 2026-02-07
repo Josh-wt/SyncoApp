@@ -198,7 +198,7 @@ export default function NotificationsScreen({
               <Text style={styles.headerSubtitle}>Recent activity</Text>
             </View>
             <Pressable style={styles.moreButton}>
-              <MaterialIcons name="more-horiz" size={20} color="#121118" />
+              <MaterialIcons name="more-horiz" size={20} color="#2F00FF" />
             </Pressable>
           </View>
 

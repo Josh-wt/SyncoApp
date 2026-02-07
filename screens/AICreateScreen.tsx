@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   Animated,
   KeyboardAvoidingView,
   Platform,
@@ -20,6 +21,7 @@ import {
   WaveIcon,
 } from '../components/icons';
 import { parseReminderFromText } from '../lib/aiReminders';
+import { canCreateReminder } from '../lib/reminderLimits';
 import { CreateReminderInput } from '../lib/types';
 
 interface AICreateScreenProps {
@@ -92,6 +94,15 @@ export default function AICreateScreen({ onBack, onSave }: AICreateScreenProps) 
       return;
     }
 
+    // Check reminder limits
+    const { allowed, reason } = await canCreateReminder();
+    if (!allowed) {
+      Alert.alert('Limit Reached', reason || 'Unable to create reminder', [
+        { text: 'OK', style: 'cancel' },
+      ]);
+      return;
+    }
+
     setIsProcessing(true);
     setError(null);
 
@@ -111,11 +122,11 @@ export default function AICreateScreen({ onBack, onSave }: AICreateScreenProps) 
       <View style={[styles.canvas, { paddingTop: insets.top + 8 }]}> 
         <View style={styles.header}>
           <Pressable onPress={onBack} style={styles.iconButton}>
-            <BackIcon color="#101018" />
+            <BackIcon color="#2F00FF" />
           </Pressable>
           <Text style={styles.headerTitle}>AI Assistant</Text>
           <Pressable style={styles.iconButton}>
-            <CloseIcon color="#101018" size={22} />
+            <CloseIcon color="#2F00FF" size={22} />
           </Pressable>
         </View>
 

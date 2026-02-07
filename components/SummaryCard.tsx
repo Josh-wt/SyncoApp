@@ -70,7 +70,7 @@ export default function SummaryCard({ type, value, onPress }: SummaryCardProps) 
         {isPriority ? (
           <View style={styles.priorityDot} />
         ) : (
-          <MaterialIcons name="calendar-today" size={18} color="#d1d5db" />
+          <MaterialIcons name="calendar-today" size={18} color="#2F00FF" />
         )}
       </View>
       <View style={styles.cardBottom}>

@@ -2,10 +2,11 @@ import { Dimensions, StyleSheet, Text, View, Pressable } from 'react-native';
 import Svg, { Defs, RadialGradient, Stop, Rect, Ellipse } from 'react-native-svg';
 import { BlurView } from '@react-native-community/blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { GiftIcon } from './icons';
+import { supabase } from '../lib/supabase';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 interface QuickGlanceCardProps {
   onGiftPress?: () => void;
@@ -86,11 +87,40 @@ const themes = {
 export default function QuickGlanceCard({ onGiftPress }: QuickGlanceCardProps) {
   const insets = useSafeAreaInsets();
   const gradientHeight = 480 + insets.top;
+  const [userName, setUserName] = useState('Sunshine');
 
   const timeOfDay = useMemo(() => getTimeOfDay(), []);
   const greeting = useMemo(() => getGreeting(timeOfDay), [timeOfDay]);
   const weekDates = useMemo(() => getWeekDates(), []);
   const theme = themes[timeOfDay];
+
+  // Fetch user's name from their account
+  useEffect(() => {
+    const fetchUserName = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          // Try to get name from user metadata (Google/Apple sign-in)
+          const fullName = user.user_metadata?.full_name || user.user_metadata?.name;
+          if (fullName) {
+            // Use first name only
+            const firstName = fullName.split(' ')[0];
+            setUserName(firstName);
+          } else if (user.email) {
+            // Fallback to email username if no name available
+            const emailName = user.email.split('@')[0];
+            const capitalized = emailName.charAt(0).toUpperCase() + emailName.slice(1);
+            setUserName(capitalized);
+          }
+        }
+      } catch (error) {
+        // Keep default "Sunshine" if error
+        console.log('Error fetching user name:', error);
+      }
+    };
+
+    fetchUserName();
+  }, []);
 
   return (
     <View style={styles.container}>
@@ -163,8 +193,8 @@ export default function QuickGlanceCard({ onGiftPress }: QuickGlanceCardProps) {
         {/* Header row */}
         <View style={styles.header}>
           <Text style={styles.heading}>
-            <Text style={styles.headingDark}>{greeting}, </Text>
-            <Text style={styles.headingLight}>Sunshine</Text>
+            <Text style={styles.headingLight}>{greeting}, </Text>
+            <Text style={styles.headingDark}>{userName}</Text>
           </Text>
 
           <Pressable
@@ -174,7 +204,7 @@ export default function QuickGlanceCard({ onGiftPress }: QuickGlanceCardProps) {
             ]}
             onPress={onGiftPress}
           >
-            <GiftIcon color="#7A8FA8" />
+            <GiftIcon color="#2F00FF" />
           </Pressable>
         </View>
 
@@ -235,12 +265,13 @@ const styles = StyleSheet.create({
     lineHeight: 36,
     fontFamily: 'BricolageGrotesque-Medium',
     letterSpacing: -0.5,
+    marginTop: SCREEN_HEIGHT * 0.07,
   },
   headingDark: {
     color: '#1F2937',
   },
   headingLight: {
-    color: '#9CA3AF',
+    color: '#D6C6F5',
   },
   giftButton: {
     backgroundColor: 'rgba(255, 255, 255, 0.5)',

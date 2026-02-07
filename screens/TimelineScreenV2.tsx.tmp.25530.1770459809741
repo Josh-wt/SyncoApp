@@ -1,0 +1,542 @@
+import '../global.css';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  Text,
+  View,
+  Pressable,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { MaterialIcons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+import BottomNavBar, { TabName } from '../components/BottomNavBar';
+import { CreationMode } from '../components/CreateReminderModal';
+import FeedbackOverlay, { FeedbackType } from '../components/FeedbackOverlay';
+import {
+  getAllFutureReminders,
+  processRemindersStatus,
+  deleteReminder,
+  snoozeReminder,
+  updateReminderStatus,
+} from '../lib/reminders';
+import { Reminder } from '../lib/types';
+import { supabase } from '../lib/supabase';
+
+interface TimelineScreenV2Props {
+  onCreateReminder: (mode: CreationMode) => void;
+  onTabPress: (tab: TabName) => void;
+}
+
+type TimeOfDayPeriod = 'morning' | 'afternoon' | 'evening' | 'night';
+
+interface GroupedReminders {
+  morning: Reminder[];
+  afternoon: Reminder[];
+  evening: Reminder[];
+  night: Reminder[];
+}
+
+function isSameDay(date1: Date, date2: Date): boolean {
+  return (
+    date1.getFullYear() === date2.getFullYear() &&
+    date1.getMonth() === date2.getMonth() &&
+    date1.getDate() === date2.getDate()
+  );
+}
+
+function getTimeOfDay(date: Date): TimeOfDayPeriod {
+  const hour = date.getHours();
+  if (hour >= 5 && hour < 12) return 'morning';
+  if (hour >= 12 && hour < 17) return 'afternoon';
+  if (hour >= 17 && hour < 21) return 'evening';
+  return 'night';
+}
+
+function groupRemindersByTimeOfDay(reminders: Reminder[]): GroupedReminders {
+  return reminders.reduce(
+    (groups, reminder) => {
+      const date = new Date(reminder.scheduled_time);
+      const period = getTimeOfDay(date);
+      groups[period].push(reminder);
+      return groups;
+    },
+    {
+      morning: [],
+      afternoon: [],
+      evening: [],
+      night: [],
+    } as GroupedReminders
+  );
+}
+
+function formatTime(isoString: string): string {
+  const date = new Date(isoString);
+  return date.toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
+
+export default function TimelineScreenV2({
+  onCreateReminder,
+  onTabPress,
+}: TimelineScreenV2Props) {
+  const insets = useSafeAreaInsets();
+  const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [feedback, setFeedback] = useState<FeedbackType>(null);
+
+  const fetchReminders = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const allReminders = await getAllFutureReminders();
+      const processed = processRemindersStatus(allReminders);
+      setReminders(processed);
+    } catch (error) {
+      console.error('Error fetching reminders:', error);
+      Alert.alert('Error', 'Failed to load reminders');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchReminders();
+
+    const subscription = supabase
+      .channel('reminders-timeline')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'reminders' }, () => {
+        fetchReminders();
+      })
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [fetchReminders]);
+
+  const handleDeleteReminder = useCallback(
+    async (reminder: Reminder) => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      Alert.alert(
+        'Delete Reminder',
+        `Are you sure you want to delete "${reminder.title}"?`,
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+            onPress: () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light),
+          },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                await deleteReminder(reminder.id);
+                fetchReminders();
+                setFeedback('success');
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              } catch (error) {
+                setFeedback('error');
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                Alert.alert('Error', 'Failed to delete reminder.');
+              }
+            },
+          },
+        ]
+      );
+    },
+    [fetchReminders]
+  );
+
+  const handleSnoozeReminder = useCallback(
+    async (reminder: Reminder) => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      Alert.alert(
+        'Snooze',
+        'Snooze for how long?',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+            onPress: () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light),
+          },
+          {
+            text: '15 minutes',
+            onPress: async () => {
+              try {
+                await snoozeReminder(reminder.id, 15);
+                fetchReminders();
+                setFeedback('success');
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              } catch (error) {
+                setFeedback('error');
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                Alert.alert('Error', 'Failed to snooze reminder.');
+              }
+            },
+          },
+          {
+            text: '1 hour',
+            onPress: async () => {
+              try {
+                await snoozeReminder(reminder.id, 60);
+                fetchReminders();
+                setFeedback('success');
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              } catch (error) {
+                setFeedback('error');
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                Alert.alert('Error', 'Failed to snooze reminder.');
+              }
+            },
+          },
+          {
+            text: '1 day',
+            onPress: async () => {
+              try {
+                await snoozeReminder(reminder.id, 1440);
+                fetchReminders();
+                setFeedback('success');
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              } catch (error) {
+                setFeedback('error');
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                Alert.alert('Error', 'Failed to snooze reminder.');
+              }
+            },
+          },
+        ]
+      );
+    },
+    [fetchReminders]
+  );
+
+  const handleCompleteReminder = useCallback(
+    async (reminder: Reminder) => {
+      try {
+        await updateReminderStatus(reminder.id, 'completed');
+        fetchReminders();
+        setFeedback('success');
+      } catch (error) {
+        setFeedback('error');
+        Alert.alert('Error', 'Failed to complete reminder.');
+      }
+    },
+    [fetchReminders]
+  );
+
+  const selectedDateReminders = reminders
+    .filter((r) => isSameDay(new Date(r.scheduled_time), selectedDate))
+    .sort((a, b) => new Date(a.scheduled_time).getTime() - new Date(b.scheduled_time).getTime());
+
+  const groupedReminders = groupRemindersByTimeOfDay(selectedDateReminders);
+  const periods: { key: TimeOfDayPeriod; label: string; number: string }[] = [
+    { key: 'morning', label: 'Morning', number: '01' },
+    { key: 'afternoon', label: 'Afternoon', number: '02' },
+    { key: 'evening', label: 'Evening', number: '03' },
+    { key: 'night', label: 'Night', number: '04' },
+  ];
+
+  // Generate 7 days for date scroller (3 before, today, 3 after)
+  const dates = Array.from({ length: 7 }, (_, i) => {
+    const date = new Date();
+    date.setDate(date.getDate() - 3 + i);
+    return date;
+  });
+
+  return (
+    <View style={{ flex: 1, backgroundColor: '#ffffff' }}>
+      <ScrollView
+        contentContainerStyle={{ paddingBottom: insets.bottom + 140, flexGrow: 1 }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header Area - EXACT from HTML */}
+        <View style={{ flexDirection: 'row', paddingTop: insets.top + 32, paddingBottom: 16, paddingLeft: 0 }}>
+          {/* Vertical Rotated Date - EXACT from HTML */}
+          <View style={{ width: 48, flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', paddingTop: 16, borderRightWidth: 1, borderRightColor: 'rgba(47, 0, 255, 0.05)', marginRight: 8 }}>
+            <Text
+              style={{
+                fontSize: 12,
+                fontFamily: 'BricolageGrotesque-Bold',
+                letterSpacing: 2.4,
+                color: '#94a3b8',
+                textTransform: 'uppercase',
+                transform: [{ rotate: '-90deg' }, { translateY: 32 }]
+              }}
+            >
+              {selectedDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+            </Text>
+          </View>
+
+          {/* Horizontal Date Scroller - EXACT from HTML */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ paddingLeft: 8, paddingRight: 24, alignItems: 'flex-end', gap: 24, paddingVertical: 8 }}
+          >
+            {dates.map((date, index) => {
+              const isCenter = index === 3;
+              const dayName = date.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
+              const dayNumber = date.getDate();
+
+              // Opacity and size based on distance from center (EXACT from HTML)
+              let opacityClass = 'opacity-40';
+              let dayFontSize = 'text-xs';
+              let numberFontSize = 'text-xl';
+
+              if (index === 2 || index === 4) {
+                opacityClass = 'opacity-60';
+                dayFontSize = 'text-sm';
+                numberFontSize = 'text-2xl';
+              }
+
+              if (isCenter) {
+                opacityClass = '';
+                dayFontSize = 'text-sm';
+                numberFontSize = 'text-5xl';
+              }
+
+              return (
+                <Pressable
+                  key={index}
+                  onPress={() => {
+                    setSelectedDate(date);
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  }}
+                  style={{ flexDirection: 'column', alignItems: 'center', gap: 4 }}
+                >
+                  <Text
+                    style={{
+                      fontSize: dayFontSize === 'text-xs' ? 12 : 14,
+                      fontFamily: isCenter ? 'BricolageGrotesque-Bold' : 'BricolageGrotesque-Medium',
+                      color: isCenter ? '#2f00ff' : '#000',
+                      opacity: isCenter ? 1 : (opacityClass === 'opacity-40' ? 0.4 : 0.6),
+                    }}
+                  >
+                    {dayName}
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: numberFontSize === 'text-xl' ? 20 : numberFontSize === 'text-2xl' ? 24 : 48,
+                      fontFamily: isCenter ? 'BricolageGrotesque-ExtraBold' : 'BricolageGrotesque-Bold',
+                      color: isCenter ? '#2f00ff' : '#000',
+                      opacity: isCenter ? 1 : (opacityClass === 'opacity-40' ? 0.4 : 0.6),
+                      lineHeight: undefined,
+                    }}
+                  >
+                    {dayNumber}
+                  </Text>
+                  {isCenter && <View style={{ height: 6, width: 6, borderRadius: 3, backgroundColor: '#2f00ff', marginTop: 8 }} />}
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        {/* Main Content - EXACT from HTML */}
+        {isLoading ? (
+          <View style={{ marginTop: 56, alignItems: 'center' }}>
+            <ActivityIndicator size="large" color="#2f00ff" />
+            <Text style={{ marginTop: 16, fontSize: 14, fontFamily: 'BricolageGrotesque-Medium', color: '#94a3b8' }}>
+              Loading reminders...
+            </Text>
+          </View>
+        ) : (
+          <View style={{ flexDirection: 'column', gap: 32, paddingHorizontal: 16, position: 'relative', marginTop: 16 }}>
+            {periods.map((period, periodIndex) => {
+              const periodReminders = groupedReminders[period.key];
+              if (periodReminders.length === 0) return null;
+
+              return (
+                <View key={period.key} style={{ position: 'relative', marginTop: 32 }}>
+                  {/* Massive Background Numeral - EXACT from HTML (180px) */}
+                  <Text
+                    style={{
+                      position: 'absolute',
+                      top: -64,
+                      left: periodIndex % 2 === 0 ? -24 : undefined,
+                      right: periodIndex % 2 === 0 ? undefined : -24,
+                      fontSize: 180,
+                      fontFamily: 'BricolageGrotesque-ExtraBold',
+                      color: 'rgba(226, 232, 240, 0.5)',
+                      zIndex: -10,
+                      lineHeight: 180,
+                      textAlign: periodIndex % 2 === 0 ? 'left' : 'right',
+                      width: periodIndex % 2 === 0 ? undefined : '100%',
+                    }}
+                  >
+                    {period.number}
+                  </Text>
+
+                  <View style={{ flexDirection: 'column', gap: 24, paddingLeft: 32 }}>
+                    {/* Section Label - EXACT from HTML */}
+                    <Text style={{
+                      fontSize: 12,
+                      fontFamily: 'BricolageGrotesque-Bold',
+                      color: '#94a3b8',
+                      textTransform: 'uppercase',
+                      letterSpacing: 2.4,
+                      marginBottom: -10,
+                    }}>
+                      {period.label}
+                    </Text>
+
+                    {/* Cards - EXACT from HTML */}
+                    {periodReminders.map((reminder, index) => {
+                      const hasTopRightGradient = index % 2 === 0;
+
+                      return (
+                        <View
+                          key={reminder.id}
+                          style={{
+                            backgroundColor: reminder.status === 'completed' ? 'rgba(255, 255, 255, 0.6)' : '#ffffff',
+                            padding: 24,
+                            borderRadius: 32,
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 2 },
+                            shadowOpacity: 0.05,
+                            shadowRadius: 4,
+                            elevation: 2,
+                            position: 'relative',
+                            overflow: 'hidden',
+                            opacity: reminder.status === 'completed' ? 0.6 : 1,
+                          }}
+                        >
+                          {/* Decorative gradient corner - EXACT from HTML */}
+                          {hasTopRightGradient ? (
+                            <View style={{
+                              position: 'absolute',
+                              top: 0,
+                              right: 0,
+                              width: 96,
+                              height: 96,
+                              backgroundColor: 'rgba(47, 0, 255, 0.1)',
+                              borderBottomLeftRadius: 64,
+                            }} />
+                          ) : (
+                            <View style={{
+                              position: 'absolute',
+                              bottom: 0,
+                              left: 0,
+                              width: 128,
+                              height: 128,
+                              backgroundColor: 'rgba(168, 85, 247, 0.1)',
+                              borderTopRightRadius: 80,
+                            }} />
+                          )}
+
+                          {/* Time Chip - EXACT from HTML */}
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                            <View style={{ backgroundColor: '#2f00ff', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 9999 }}>
+                              <Text style={{ color: '#ffffff', fontSize: 12, fontFamily: 'BricolageGrotesque-Bold' }}>
+                                {formatTime(reminder.scheduled_time)}
+                              </Text>
+                            </View>
+                          </View>
+
+                          {/* Title - EXACT from HTML (3xl font-black) */}
+                          <Text
+                            numberOfLines={2}
+                            style={{
+                              fontSize: 30,
+                              fontFamily: 'BricolageGrotesque-ExtraBold',
+                              color: '#0f172a',
+                              letterSpacing: -0.6,
+                              lineHeight: 36,
+                            }}
+                          >
+                            {reminder.title}
+                          </Text>
+
+                          {/* Description - EXACT from HTML */}
+                          {reminder.description && (
+                            <Text
+                              numberOfLines={1}
+                              style={{
+                                color: '#94a3b8',
+                                fontSize: 14,
+                                marginTop: 8,
+                                fontFamily: 'BricolageGrotesque-Medium',
+                              }}
+                            >
+                              {reminder.description}
+                            </Text>
+                          )}
+
+                          {/* Action Buttons - EXACT from HTML (on ALL cards) */}
+                          {reminder.status !== 'completed' && (
+                            <View style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              borderTopWidth: 1,
+                              borderTopColor: '#f1f5f9',
+                              paddingTop: 16,
+                              marginTop: 8,
+                            }}>
+                              <Pressable
+                                onPress={() => {
+                                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                                  handleCompleteReminder(reminder);
+                                }}
+                                style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                              >
+                                <MaterialIcons name="check-circle" size={16} color="#94a3b8" />
+                                <Text style={{ fontSize: 12, fontFamily: 'BricolageGrotesque-Medium', color: '#94a3b8' }}>
+                                  Complete
+                                </Text>
+                              </Pressable>
+
+                              <Pressable
+                                onPress={() => {
+                                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                                  handleSnoozeReminder(reminder);
+                                }}
+                                style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                              >
+                                <MaterialIcons name="snooze" size={16} color="#94a3b8" />
+                                <Text style={{ fontSize: 12, fontFamily: 'BricolageGrotesque-Medium', color: '#94a3b8' }}>
+                                  Snooze
+                                </Text>
+                              </Pressable>
+
+                              <Pressable
+                                onPress={() => {
+                                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                                  handleDeleteReminder(reminder);
+                                }}
+                                style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                              >
+                                <MaterialIcons name="delete" size={16} color="#94a3b8" />
+                                <Text style={{ fontSize: 12, fontFamily: 'BricolageGrotesque-Medium', color: '#94a3b8' }}>
+                                  Delete
+                                </Text>
+                              </Pressable>
+                            </View>
+                          )}
+                        </View>
+                      );
+                    })}
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        )}
+      </ScrollView>
+
+      <BottomNavBar
+        activeTab="calendar"
+        onTabPress={onTabPress}
+        onCreateReminder={onCreateReminder}
+      />
+
+      <FeedbackOverlay type={feedback} onComplete={() => setFeedback(null)} />
+    </View>
+  );
+}

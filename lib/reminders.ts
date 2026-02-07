@@ -145,11 +145,42 @@ export function computeReminderStatus(reminder: Reminder): ReminderStatus {
 }
 
 // Process reminders to update their computed status
+// The next upcoming reminder (first future reminder) is always marked as 'current'
 export function processRemindersStatus(reminders: Reminder[]): Reminder[] {
-  return reminders.map((reminder) => ({
-    ...reminder,
-    status: computeReminderStatus(reminder),
-  }));
+  const now = new Date();
+
+  // Find the index of the first future reminder
+  const firstFutureIndex = reminders.findIndex(
+    (reminder) => new Date(reminder.scheduled_time) > now
+  );
+
+  return reminders.map((reminder, index) => {
+    const scheduledTime = new Date(reminder.scheduled_time);
+    const timeDiff = scheduledTime.getTime() - now.getTime();
+    const minutesDiff = timeDiff / (1000 * 60);
+
+    // Respect manually set placeholder status
+    if (reminder.status === 'placeholder') {
+      return { ...reminder, status: 'placeholder' as ReminderStatus };
+    }
+
+    // Past reminders
+    if (index < firstFutureIndex || firstFutureIndex === -1) {
+      return { ...reminder, status: 'completed' as ReminderStatus };
+    }
+
+    // The next upcoming reminder is marked as 'current'
+    if (index === firstFutureIndex) {
+      return { ...reminder, status: 'current' as ReminderStatus };
+    }
+
+    // Future reminders: upcoming (within 2 hours) or future (beyond 2 hours)
+    if (minutesDiff <= 120) {
+      return { ...reminder, status: 'upcoming' as ReminderStatus };
+    }
+
+    return { ...reminder, status: 'future' as ReminderStatus };
+  });
 }
 
 // Recurring Rules Functions
