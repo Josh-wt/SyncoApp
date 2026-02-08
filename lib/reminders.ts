@@ -36,6 +36,18 @@ export async function getNotifiedReminders(): Promise<Reminder[]> {
   return data ?? [];
 }
 
+export async function getOverdueReminders(): Promise<Reminder[]> {
+  const { data, error } = await supabase
+    .from('reminders')
+    .select('*')
+    .not('notified_at', 'is', null)
+    .neq('status', 'completed')
+    .order('notified_at', { ascending: false });
+
+  if (error) throw error;
+  return data ?? [];
+}
+
 export async function getTodayReminders(): Promise<Reminder[]> {
   const today = new Date();
   const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();

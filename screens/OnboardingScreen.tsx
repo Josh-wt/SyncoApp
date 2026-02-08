@@ -10,13 +10,19 @@ interface OnboardingScreenProps {
 
 const SLIDES = [
   {
+    title: 'Never forget what matters',
+    image: require('../assets/zero.png'),
+    topImage: null,
+    isIntro: true,
+  },
+  {
     title: 'Create reminders seemlessly with full control',
     image: require('../assets/one.png'),
     topImage: require('../assets/onetop.png'),
   },
   {
-    title: 'Snooze, so you don\'t lose. Handle notifications with ease',
-    image: require('../assets/two.png'),
+    title: 'Your reminders, everywhere you are',
+    image: require('../assets/twoo.png'),
     topImage: require('../assets/onetop.png'),
   },
 ];
@@ -79,19 +85,21 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
         resizeMode="cover"
       />
 
-      <View style={[styles.oneImageWrap, { top: height * 0.07, alignItems: 'flex-start', paddingLeft: (width - width * 0.987376) / 2 - width * 0.055 }]}>
-        <Image
-          source={slide.topImage}
-          style={[styles.oneImage, { width: width * 0.987376, height: width * 0.987376 }]}
-          resizeMode="contain"
-        />
-      </View>
+      {slide.topImage && (
+        <View style={[styles.oneImageWrap, { top: height * 0.07, alignItems: 'flex-start', paddingLeft: (width - width * 0.987376) / 2 - width * 0.055 }]}>
+          <Image
+            source={slide.topImage}
+            style={[styles.oneImage, { width: width * 0.987376, height: width * 0.987376 }]}
+            resizeMode="contain"
+          />
+        </View>
+      )}
 
       <Animated.View
         style={[
           styles.oneImageWrap,
           {
-            top: currentSlide === 1 ? height * 0.35 : height * 0.38,
+            top: slide.isIntro ? height * 0.25 : (currentSlide === 2 ? height * 0.39 : height * 0.38),
             opacity: fadeAnim,
             transform: [{ translateY: slideAnim }],
           }
@@ -99,7 +107,13 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
       >
         <Image
           source={slide.image}
-          style={[styles.oneImage, { width: width * 1.2, height: width * 1.2 }]}
+          style={[
+            styles.oneImage,
+            {
+              width: slide.isIntro ? width * 0.5 : (currentSlide === 0.5 ? width * 5 : width * 1.3),
+              height: slide.isIntro ? width * 0.5 : (currentSlide === 0.5 ? width * 3 : width * 1.2)
+            }
+          ]}
           resizeMode="contain"
         />
       </Animated.View>
@@ -113,7 +127,13 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
       <Animated.View
         style={[
           styles.textBlock,
-          {
+          slide.isIntro ? {
+            left: 24,
+            right: 24,
+            top: height * 0.25 + width * 0.8 + 24,
+            opacity: fadeAnim,
+            transform: [{ translateY: slideAnim }],
+          } : {
             left: 24,
             right: 24,
             bottom: 120,
@@ -122,20 +142,22 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
           }
         ]}
       >
-        <Text style={styles.headline}>
+        <Text style={[styles.headline, slide.isIntro && { textAlign: 'center', fontSize: 24 }]}>
           {slide.title}
         </Text>
-        <View style={styles.dotsRow}>
-          {SLIDES.map((_, index) => (
-            <View
-              key={index}
-              style={[
-                styles.dot,
-                index === currentSlide && styles.dotActive
-              ]}
-            />
-          ))}
-        </View>
+        {!slide.isIntro && (
+          <View style={styles.dotsRow}>
+            {SLIDES.map((_, index) => (
+              <View
+                key={index}
+                style={[
+                  styles.dot,
+                  index === currentSlide && styles.dotActive
+                ]}
+              />
+            ))}
+          </View>
+        )}
       </Animated.View>
 
       <View style={[styles.buttonWrap, { left: 20, right: 20, bottom: 36 }]}>
@@ -178,7 +200,7 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
                 style={styles.highlightRight}
               />
               <Text style={styles.primaryButtonText}>
-                {currentSlide === SLIDES.length - 1 ? 'Get Started' : 'Next'}
+                {currentSlide === 0 ? 'Start' : (currentSlide === SLIDES.length - 1 ? 'Get Started' : 'Next')}
               </Text>
             </LinearGradient>
           </BlurView>
@@ -206,8 +228,7 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   oneImage: {
-    maxWidth: 640,
-    maxHeight: 640,
+    // No max constraints - size controlled by inline styles
   },
   skipWrap: {
     position: 'absolute',

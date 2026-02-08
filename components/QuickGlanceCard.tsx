@@ -1,9 +1,8 @@
-import { Dimensions, StyleSheet, Text, View, Pressable } from 'react-native';
+import { Dimensions, StyleSheet, Text, View, Pressable, Image } from 'react-native';
 import Svg, { Defs, RadialGradient, Stop, Rect, Ellipse } from 'react-native-svg';
 import { BlurView } from '@react-native-community/blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMemo, useState, useEffect } from 'react';
-import { GiftIcon } from './icons';
 import { supabase } from '../lib/supabase';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -197,15 +196,21 @@ export default function QuickGlanceCard({ onGiftPress }: QuickGlanceCardProps) {
             <Text style={styles.headingDark}>{userName}</Text>
           </Text>
 
-          <Pressable
-            style={({ pressed }) => [
-              styles.giftButton,
-              pressed && styles.giftButtonPressed,
-            ]}
-            onPress={onGiftPress}
-          >
-            <GiftIcon color="#2F00FF" />
-          </Pressable>
+          <View style={{ alignSelf: 'flex-start', marginTop: SCREEN_HEIGHT * 0.07, marginRight: SCREEN_WIDTH * 0.04 }}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.giftButton,
+                { width: 52, height: 52 },
+                pressed && styles.giftButtonPressed,
+              ]}
+              onPress={onGiftPress}
+            >
+              <Image
+                source={require('../assets/zero.png')}
+                style={{ width: 52, height: 52 }}
+              />
+            </Pressable>
+          </View>
         </View>
 
         {/* Days row */}
@@ -276,8 +281,8 @@ const styles = StyleSheet.create({
   giftButton: {
     backgroundColor: 'rgba(255, 255, 255, 0.5)',
     borderRadius: 20,
-    width: 44,
-    height: 44,
+    width: 46,
+    height: 46,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,

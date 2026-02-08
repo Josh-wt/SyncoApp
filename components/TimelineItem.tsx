@@ -247,7 +247,7 @@ const styles = StyleSheet.create({
     borderRadius: 32,
     paddingVertical: 16,
     paddingHorizontal: 20,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#fbf8ffff',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -258,13 +258,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#2F00FF',
   },
   bubbleLunch: {
-    backgroundColor: 'rgba(255,255,255,0.8)',
+    backgroundColor: 'rgba(246,241,255,0.8)',
     borderRadius: 32,
     alignSelf: 'center',
     maxWidth: '75%',
   },
   bubbleReview: {
-    backgroundColor: 'rgba(255,255,255,0.6)',
+    backgroundColor: 'rgba(246,241,255,0.6)',
     borderRadius: 32,
   },
   timelineBubbleTitle: {

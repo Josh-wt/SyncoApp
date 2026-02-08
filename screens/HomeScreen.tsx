@@ -11,7 +11,7 @@ import { CreationMode } from '../components/CreateReminderModal';
 import { useReminders } from '../hooks/useReminders';
 import ManualCreateScreen from './ManualCreateScreen';
 import AICreateScreen from './AICreateScreen';
-import NotificationsScreen from './NotificationsScreen';
+import ProgressScreen from './ProgressScreen';
 import TimelineScreenV2 from './TimelineScreenV2';
 import SettingsScreen from './SettingsScreen';
 import { CreateReminderInput } from '../lib/types';
@@ -100,7 +100,7 @@ export default function HomeScreen() {
   // Render separate screens for timeline, notifications, settings
   if (currentScreen === 'notifications') {
     return (
-      <NotificationsScreen
+      <ProgressScreen
         onBack={handleBackToHome}
         onCreateReminder={handleCreateReminder}
         onTabPress={handleTabPress}
@@ -111,7 +111,6 @@ export default function HomeScreen() {
   if (currentScreen === 'timeline') {
     return (
       <TimelineScreenV2
-        onBack={handleBackToHome}
         onCreateReminder={handleCreateReminder}
         onTabPress={handleTabPress}
       />
