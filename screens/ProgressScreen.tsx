@@ -17,6 +17,7 @@ import * as Haptics from 'expo-haptics';
 import BottomNavBar, { TabName } from '../components/BottomNavBar';
 import ActionPickerModal from '../components/ActionPickerModal';
 import SnoozePickerModal from '../components/SnoozePickerModal';
+import ErrorModal from '../components/ErrorModal';
 import { CreationMode } from '../components/CreateReminderModal';
 import { getOverdueReminders, updateReminderStatus, deleteReminder, snoozeReminder } from '../lib/reminders';
 import { getReminderActions, executeReminderAction, getActionIcon } from '../lib/reminderActions';
@@ -245,6 +246,8 @@ export default function ProgressScreen({
   const [selectedReminder, setSelectedReminder] = useState<Reminder | null>(null);
   const [showActionPicker, setShowActionPicker] = useState(false);
   const [showSnoozePicker, setShowSnoozePicker] = useState(false);
+  const [showError, setShowError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   const fetchProgressData = useCallback(async () => {
     try {
@@ -313,7 +316,8 @@ export default function ProgressScreen({
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       await fetchProgressData();
     } catch (error) {
-      Alert.alert('Error', 'Failed to complete reminder');
+      setErrorMessage('Failed to complete reminder');
+      setShowError(true);
     }
   }, [selectedReminder, fetchProgressData]);
 
@@ -331,7 +335,8 @@ export default function ProgressScreen({
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         await fetchProgressData();
       } catch (error) {
-        Alert.alert('Error', 'Failed to snooze reminder');
+        setErrorMessage('Failed to snooze reminder');
+        setShowError(true);
       }
     },
     [selectedReminder, fetchProgressData]
@@ -345,7 +350,8 @@ export default function ProgressScreen({
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       await fetchProgressData();
     } catch (error) {
-      Alert.alert('Error', 'Failed to delete reminder');
+      setErrorMessage('Failed to delete reminder');
+      setShowError(true);
     }
   }, [selectedReminder, fetchProgressData]);
 
@@ -475,6 +481,14 @@ export default function ProgressScreen({
         onClose={() => setShowSnoozePicker(false)}
         onSelect={handleSnoozeSelect}
         title={selectedReminder?.title || ''}
+      />
+
+      {/* Error Modal */}
+      <ErrorModal
+        visible={showError}
+        onClose={() => setShowError(false)}
+        title="Error"
+        message={errorMessage}
       />
     </View>
   );

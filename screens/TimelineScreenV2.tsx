@@ -7,7 +7,6 @@ import {
   Text,
   View,
   ActivityIndicator,
-  Alert,
   Modal,
   TouchableOpacity,
 } from 'react-native';
@@ -16,6 +15,8 @@ import { MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import Svg, { Path } from 'react-native-svg';
 import BottomNavBar, { TabName } from '../components/BottomNavBar';
+import ConfirmModal from '../components/ConfirmModal';
+import ErrorModal from '../components/ErrorModal';
 import SnoozePickerModal from '../components/SnoozePickerModal';
 import { CreationMode } from '../components/CreateReminderModal';
 import FeedbackOverlay, { FeedbackType } from '../components/FeedbackOverlay';
@@ -247,6 +248,9 @@ export default function TimelineScreenV2({
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedReminder, setSelectedReminder] = useState<Reminder | null>(null);
   const [showSnoozePicker, setShowSnoozePicker] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showError, setShowError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   const fetchReminders = useCallback(async () => {
     try {
@@ -256,7 +260,8 @@ export default function TimelineScreenV2({
       setReminders(processed);
     } catch (error) {
       console.error('Error fetching reminders:', error);
-      Alert.alert('Error', 'Failed to load reminders');
+      setErrorMessage('Failed to load reminders');
+      setShowError(true);
     } finally {
       setIsLoading(false);
     }
@@ -278,38 +283,29 @@ export default function TimelineScreenV2({
   }, [fetchReminders]);
 
   const handleDeleteReminder = useCallback(
-    async (reminder: Reminder) => {
+    (reminder: Reminder) => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      Alert.alert(
-        'Delete Reminder',
-        `Are you sure you want to delete "${reminder.title}"?`,
-        [
-          {
-            text: 'Cancel',
-            style: 'cancel',
-            onPress: () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light),
-          },
-          {
-            text: 'Delete',
-            style: 'destructive',
-            onPress: async () => {
-              try {
-                await deleteReminder(reminder.id);
-                fetchReminders();
-                setFeedback('success');
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              } catch (error) {
-                setFeedback('error');
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-                Alert.alert('Error', 'Failed to delete reminder.');
-              }
-            },
-          },
-        ]
-      );
+      setSelectedReminder(reminder);
+      setShowDeleteConfirm(true);
     },
-    [fetchReminders]
+    []
   );
+
+  const confirmDelete = useCallback(async () => {
+    if (!selectedReminder) return;
+
+    try {
+      await deleteReminder(selectedReminder.id);
+      fetchReminders();
+      setFeedback('success');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (error) {
+      setFeedback('error');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      setErrorMessage('Failed to delete reminder.');
+      setShowError(true);
+    }
+  }, [selectedReminder, fetchReminders]);
 
   const handleSnoozeReminder = useCallback(
     (reminder: Reminder) => {
@@ -332,7 +328,8 @@ export default function TimelineScreenV2({
       } catch (error) {
         setFeedback('error');
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        Alert.alert('Error', 'Failed to snooze reminder.');
+        setErrorMessage('Failed to snooze reminder.');
+        setShowError(true);
       }
     },
     [selectedReminder, fetchReminders]
@@ -346,7 +343,8 @@ export default function TimelineScreenV2({
         setFeedback('success');
       } catch (error) {
         setFeedback('error');
-        Alert.alert('Error', 'Failed to complete reminder.');
+        setErrorMessage('Failed to complete reminder.');
+        setShowError(true);
       }
     },
     [fetchReminders]
@@ -639,6 +637,26 @@ export default function TimelineScreenV2({
         onClose={() => setShowSnoozePicker(false)}
         onSelect={handleSnoozeSelect}
         title={selectedReminder?.title || ''}
+      />
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        visible={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={confirmDelete}
+        title="Delete Reminder"
+        message={`Are you sure you want to delete "${selectedReminder?.title}"?`}
+        confirmText="Delete"
+        confirmColor="#ef4444"
+        icon="delete"
+      />
+
+      {/* Error Modal */}
+      <ErrorModal
+        visible={showError}
+        onClose={() => setShowError(false)}
+        title="Error"
+        message={errorMessage}
       />
     </View>
   );

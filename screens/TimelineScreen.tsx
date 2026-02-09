@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -10,6 +9,9 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../contexts/ThemeContext';
 import BottomNavBar, { TabName } from '../components/BottomNavBar';
+import ConfirmModal from '../components/ConfirmModal';
+import ErrorModal from '../components/ErrorModal';
+import SnoozePickerModal from '../components/SnoozePickerModal';
 import { CreationMode } from '../components/CreateReminderModal';
 import DateScrollerEnhanced from '../components/DateScrollerEnhanced';
 import TimeOfDayHeader, { TimeOfDayPeriod } from '../components/TimeOfDayHeader';
@@ -82,6 +84,11 @@ export default function TimelineScreen({
   const [isLoading, setIsLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [feedback, setFeedback] = useState<FeedbackType>(null);
+  const [selectedReminder, setSelectedReminder] = useState<Reminder | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showSnooze, setShowSnooze] = useState(false);
+  const [showError, setShowError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   const fetchReminders = useCallback(async () => {
     try {
@@ -118,74 +125,50 @@ export default function TimelineScreen({
   );
 
   const handleDeleteReminder = useCallback(
-    async (reminder: Reminder) => {
-      Alert.alert('Delete Reminder', `Delete "${reminder.title}"?`, [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteReminder(reminder.id);
-              setReminders((prev) => prev.filter((r) => r.id !== reminder.id));
-              setFeedback('success');
-            } catch (error) {
-              setFeedback('error');
-              Alert.alert('Error', 'Failed to delete reminder.');
-            }
-          },
-        },
-      ]);
+    (reminder: Reminder) => {
+      setSelectedReminder(reminder);
+      setShowDeleteConfirm(true);
     },
     []
   );
 
+  const confirmDelete = useCallback(async () => {
+    if (!selectedReminder) return;
+
+    try {
+      await deleteReminder(selectedReminder.id);
+      setReminders((prev) => prev.filter((r) => r.id !== selectedReminder.id));
+      setFeedback('success');
+    } catch (error) {
+      setFeedback('error');
+      setErrorMessage('Failed to delete reminder.');
+      setShowError(true);
+    }
+  }, [selectedReminder]);
+
   const handleSnoozeReminder = useCallback(
-    async (reminder: Reminder) => {
-      Alert.alert('Snooze', 'Snooze for how long?', [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: '15 minutes',
-          onPress: async () => {
-            try {
-              await snoozeReminder(reminder.id, 15);
-              fetchReminders();
-              setFeedback('success');
-            } catch (error) {
-              setFeedback('error');
-              Alert.alert('Error', 'Failed to snooze.');
-            }
-          },
-        },
-        {
-          text: '1 hour',
-          onPress: async () => {
-            try {
-              await snoozeReminder(reminder.id, 60);
-              fetchReminders();
-              setFeedback('success');
-            } catch (error) {
-              setFeedback('error');
-              Alert.alert('Error', 'Failed to snooze.');
-            }
-          },
-        },
-        {
-          text: '1 day',
-          onPress: async () => {
-            try {
-              await snoozeReminder(reminder.id, 1440);
-              fetchReminders();
-              setFeedback('success');
-            } catch (error) {
-              setFeedback('error');
-              Alert.alert('Error', 'Failed to snooze.');
-            }
-          },
-        },
-      ]);
+    (reminder: Reminder) => {
+      setSelectedReminder(reminder);
+      setShowSnooze(true);
     },
-    [fetchReminders]
+    []
+  );
+
+  const handleSnoozeSelect = useCallback(
+    async (minutes: number) => {
+      if (!selectedReminder) return;
+
+      try {
+        await snoozeReminder(selectedReminder.id, minutes);
+        fetchReminders();
+        setFeedback('success');
+      } catch (error) {
+        setFeedback('error');
+        setErrorMessage('Failed to snooze reminder.');
+        setShowError(true);
+      }
+    },
+    [selectedReminder, fetchReminders]
   );
 
   const handleCompleteReminder = useCallback(
@@ -196,7 +179,8 @@ export default function TimelineScreen({
         setFeedback('success');
       } catch (error) {
         setFeedback('error');
-        Alert.alert('Error', 'Failed to complete reminder.');
+        setErrorMessage('Failed to complete reminder.');
+        setShowError(true);
       }
     },
     [fetchReminders]
@@ -282,6 +266,34 @@ export default function TimelineScreen({
 
         {/* Feedback overlay for success/error animations */}
         <FeedbackOverlay type={feedback} onComplete={() => setFeedback(null)} />
+
+        {/* Delete Confirmation Modal */}
+        <ConfirmModal
+          visible={showDeleteConfirm}
+          onClose={() => setShowDeleteConfirm(false)}
+          onConfirm={confirmDelete}
+          title="Delete Reminder"
+          message={`Are you sure you want to delete "${selectedReminder?.title}"?`}
+          confirmText="Delete"
+          confirmColor="#ef4444"
+          icon="delete"
+        />
+
+        {/* Snooze Picker Modal */}
+        <SnoozePickerModal
+          visible={showSnooze}
+          onClose={() => setShowSnooze(false)}
+          onSelect={handleSnoozeSelect}
+          title={selectedReminder?.title || ''}
+        />
+
+        {/* Error Modal */}
+        <ErrorModal
+          visible={showError}
+          onClose={() => setShowError(false)}
+          title="Error"
+          message={errorMessage}
+        />
       </View>
     </View>
   );
