@@ -26,7 +26,7 @@ import { CreateReminderInput } from '../lib/types';
 
 interface AICreateScreenProps {
   onBack: () => void;
-  onSave: (input: CreateReminderInput) => Promise<void>;
+  onSave: (input: CreateReminderInput) => Promise<{ id: string } | void>;
 }
 
 const SAMPLE_PROMPTS = [

@@ -79,6 +79,47 @@ export interface CreateRecurringRuleInput {
 
 export type RecurringOption = 'none' | 'daily' | 'saved' | 'custom';
 
+// Reminder Actions
+export type ReminderActionType = 'call' | 'link' | 'location' | 'email' | 'note' | 'assign' | 'photo' | 'voice' | 'subtasks';
+
+export interface ReminderAction {
+  id: string;
+  reminder_id: string;
+  action_type: ReminderActionType;
+  action_value: any; // Flexible JSON storage
+  metadata?: Record<string, any>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateReminderActionInput {
+  action_type: ReminderActionType;
+  action_value: any;
+  metadata?: Record<string, any>;
+}
+
+// Reminder Attachments
+export type AttachmentType = 'file' | 'photo' | 'link' | 'voice';
+
+export interface ReminderAttachment {
+  id: string;
+  reminder_id: string;
+  attachment_type: AttachmentType;
+  storage_url: string;
+  file_name: string | null;
+  file_size: number | null;
+  mime_type: string | null;
+  created_at: string;
+}
+
+export interface CreateAttachmentInput {
+  attachment_type: AttachmentType;
+  storage_url: string;
+  file_name?: string;
+  file_size?: number;
+  mime_type?: string;
+}
+
 // App notification types (in-app notifications, not push)
 export type NotificationCategory =
   | 'reminder'

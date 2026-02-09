@@ -23,12 +23,14 @@ import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BackIcon, CalendarSmallIcon, ScheduleIcon, CheckAllIcon, GlowTopRight, GlowBottomLeft, BellNavIcon, RepeatIcon, ChevronRightIcon, CloseIcon, BlockIcon, DailyIcon, BookmarkIcon, SlidersIcon, CheckCircleIcon, MicSparkleIcon } from '../components/icons';
 import RecurringRuleModal from '../components/RecurringRuleModal';
+import TaskConfigSection, { QuickAction } from '../components/TaskConfigSection';
 import { createRecurringRule, getRecurringRules } from '../lib/reminders';
+import { createReminderActions } from '../lib/reminderActions';
 import { parseReminderFromVoice } from '../lib/aiReminders';
 import { canCreateReminder } from '../lib/reminderLimits';
 import { useVoiceRecording } from '../hooks/useVoiceRecording';
 import { UnstableSiriOrb } from '../src/shared/ui/organisms/unstable_siri_orb';
-import { CreateReminderInput, NOTIFICATION_TIMING_OPTIONS, RecurringOption, RecurringRule } from '../lib/types';
+import { CreateReminderInput, NOTIFICATION_TIMING_OPTIONS, RecurringOption, RecurringRule, CreateReminderActionInput } from '../lib/types';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -569,7 +571,7 @@ function DateTimePicker({
 
 interface ManualCreateScreenProps {
   onBack: () => void;
-  onSave: (input: CreateReminderInput) => Promise<void>;
+  onSave: (input: CreateReminderInput) => Promise<{ id: string } | void>;
 }
 
 function getNotifyLabel(minutes: number): string {
@@ -621,6 +623,9 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
   const [customRule, setCustomRule] = useState<RecurringRule | null>(null);
   const [showRecurringModal, setShowRecurringModal] = useState(false);
   const [showRecurringPicker, setShowRecurringPicker] = useState(false);
+
+  // Reminder actions state
+  const [reminderActions, setReminderActions] = useState<CreateReminderActionInput[]>([]);
 
   // Notification picker modal state
   const [showNotifyPicker, setShowNotifyPicker] = useState(false);
@@ -1119,7 +1124,7 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
         recurringRuleId = newRule.id;
       }
 
-      await onSave({
+      const newReminder = await onSave({
         title: title.trim(),
         description: notes.trim() || undefined,
         scheduled_time: scheduledTime.toISOString(),
@@ -1127,13 +1132,24 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
         notify_before_minutes: notifyBeforeMinutes,
         recurring_rule_id: recurringRuleId,
       });
+
+      // Create reminder actions if any were selected
+      if (reminderActions.length > 0 && newReminder?.id) {
+        try {
+          await createReminderActions(newReminder.id, reminderActions);
+        } catch (error) {
+          console.error('Failed to create reminder actions:', error);
+          // Don't fail the whole operation if actions fail
+        }
+      }
+
       onBack();
     } catch {
       // Error handled by parent
     } finally {
       setIsSaving(false);
     }
-  }, [title, notes, selectedDate, selectedTime, isPriority, notifyBeforeMinutes, recurringOption, selectedSavedRule, customRule, onSave, onBack]);
+  }, [title, notes, selectedDate, selectedTime, isPriority, notifyBeforeMinutes, recurringOption, selectedSavedRule, customRule, reminderActions, onSave, onBack]);
 
   const getRecurringLabel = (): string => {
     switch (recurringOption) {
@@ -1284,6 +1300,21 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
                   </View>
                   <ChevronRightIcon opacity={0.3} />
                 </AnimatedCard>
+
+                {/* Task Configuration Section */}
+                <TaskConfigSection
+                  onActionsChange={(actions) => {
+                    const actionInputs: CreateReminderActionInput[] = actions.map(action => ({
+                      action_type: action.type,
+                      action_value: action.value,
+                    }));
+                    setReminderActions(actionInputs);
+                  }}
+                  onRepeatChange={(repeat) => {
+                    // Handle repeat configuration
+                    console.log('Repeat config:', repeat);
+                  }}
+                />
 
                 {/* Notes Card */}
                 <View style={styles.card}>

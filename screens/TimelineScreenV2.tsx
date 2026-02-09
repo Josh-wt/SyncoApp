@@ -16,6 +16,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import Svg, { Path } from 'react-native-svg';
 import BottomNavBar, { TabName } from '../components/BottomNavBar';
+import SnoozePickerModal from '../components/SnoozePickerModal';
 import { CreationMode } from '../components/CreateReminderModal';
 import FeedbackOverlay, { FeedbackType } from '../components/FeedbackOverlay';
 import {
@@ -244,6 +245,8 @@ export default function TimelineScreenV2({
   const [feedback, setFeedback] = useState<FeedbackType>(null);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [selectedReminder, setSelectedReminder] = useState<Reminder | null>(null);
+  const [showSnoozePicker, setShowSnoozePicker] = useState(false);
 
   const fetchReminders = useCallback(async () => {
     try {
@@ -309,66 +312,30 @@ export default function TimelineScreenV2({
   );
 
   const handleSnoozeReminder = useCallback(
-    async (reminder: Reminder) => {
+    (reminder: Reminder) => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      Alert.alert(
-        'Snooze',
-        'Snooze for how long?',
-        [
-          {
-            text: 'Cancel',
-            style: 'cancel',
-            onPress: () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light),
-          },
-          {
-            text: '15 minutes',
-            onPress: async () => {
-              try {
-                await snoozeReminder(reminder.id, 15);
-                fetchReminders();
-                setFeedback('success');
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              } catch (error) {
-                setFeedback('error');
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-                Alert.alert('Error', 'Failed to snooze reminder.');
-              }
-            },
-          },
-          {
-            text: '1 hour',
-            onPress: async () => {
-              try {
-                await snoozeReminder(reminder.id, 60);
-                fetchReminders();
-                setFeedback('success');
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              } catch (error) {
-                setFeedback('error');
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-                Alert.alert('Error', 'Failed to snooze reminder.');
-              }
-            },
-          },
-          {
-            text: '1 day',
-            onPress: async () => {
-              try {
-                await snoozeReminder(reminder.id, 1440);
-                fetchReminders();
-                setFeedback('success');
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              } catch (error) {
-                setFeedback('error');
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-                Alert.alert('Error', 'Failed to snooze reminder.');
-              }
-            },
-          },
-        ]
-      );
+      setSelectedReminder(reminder);
+      setShowSnoozePicker(true);
     },
-    [fetchReminders]
+    []
+  );
+
+  const handleSnoozeSelect = useCallback(
+    async (minutes: number) => {
+      if (!selectedReminder) return;
+
+      try {
+        await snoozeReminder(selectedReminder.id, minutes);
+        fetchReminders();
+        setFeedback('success');
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } catch (error) {
+        setFeedback('error');
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        Alert.alert('Error', 'Failed to snooze reminder.');
+      }
+    },
+    [selectedReminder, fetchReminders]
   );
 
   const handleCompleteReminder = useCallback(
@@ -665,6 +632,14 @@ export default function TimelineScreenV2({
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
+
+      {/* Snooze Picker Modal */}
+      <SnoozePickerModal
+        visible={showSnoozePicker}
+        onClose={() => setShowSnoozePicker(false)}
+        onSelect={handleSnoozeSelect}
+        title={selectedReminder?.title || ''}
+      />
     </View>
   );
 }

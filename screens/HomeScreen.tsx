@@ -67,7 +67,8 @@ export default function HomeScreen() {
 
   const handleSaveReminder = useCallback(async (input: CreateReminderInput) => {
     try {
-      await addReminder(input);
+      const newReminder = await addReminder(input);
+      return newReminder;
     } catch {
       Alert.alert('Error', 'Failed to save reminder. Please try again.');
       throw new Error('Failed to save');
