@@ -34,12 +34,8 @@ export default function App() {
   const notificationResponseListener = useRef<Notifications.EventSubscription | null>(null);
   const notificationReceivedListener = useRef<Notifications.EventSubscription | null>(null);
 
-  // Preload native modules to prevent reload on first use
-  useEffect(() => {
-    // Preload expo-audio and expo-file-system modules
-    import('expo-audio').catch(() => {});
-    import('expo-file-system').catch(() => {});
-  }, []);
+  // Removed preload to prevent crash during auth redirect
+  // expo-audio and expo-file-system will be loaded when needed
 
   // Auth session effect
   useEffect(() => {

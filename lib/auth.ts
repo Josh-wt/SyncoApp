@@ -45,24 +45,61 @@ export async function signInWithGoogle() {
 }
 
 export async function signInWithApple() {
-  const credential = await AppleAuthentication.signInAsync({
-    requestedScopes: [
-      AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
-      AppleAuthentication.AppleAuthenticationScope.EMAIL,
-    ],
-  });
+  try {
+    const credential = await AppleAuthentication.signInAsync({
+      requestedScopes: [
+        AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+        AppleAuthentication.AppleAuthenticationScope.EMAIL,
+      ],
+    });
 
-  if (!credential.identityToken) {
-    throw new Error('No identity token returned from Apple');
+    console.log('Apple credential received:', {
+      hasToken: !!credential.identityToken,
+      email: credential.email
+    });
+
+    if (!credential.identityToken) {
+      throw new Error('No identity token returned from Apple');
+    }
+
+    const { data, error } = await supabase.auth.signInWithIdToken({
+      provider: 'apple',
+      token: credential.identityToken,
+      nonce: credential.identityToken, // Add nonce for additional security
+    });
+
+    if (error) {
+      console.error('Supabase Apple sign in error:', error);
+      throw error;
+    }
+
+    console.log('Apple sign in successful:', {
+      hasSession: !!data.session,
+      userId: data.user?.id
+    });
+
+    // Ensure session is properly set
+    if (data.session) {
+      const { error: sessionError } = await supabase.auth.setSession({
+        access_token: data.session.access_token,
+        refresh_token: data.session.refresh_token,
+      });
+
+      if (sessionError) {
+        console.error('Failed to set session:', sessionError);
+        throw sessionError;
+      }
+    }
+
+    return data;
+  } catch (error) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'ERR_REQUEST_CANCELED') {
+      // User canceled the sign-in
+      console.log('Apple sign in canceled by user');
+      return null;
+    }
+    throw error;
   }
-
-  const { data, error } = await supabase.auth.signInWithIdToken({
-    provider: 'apple',
-    token: credential.identityToken,
-  });
-
-  if (error) throw error;
-  return data;
 }
 
 export async function signOut() {
