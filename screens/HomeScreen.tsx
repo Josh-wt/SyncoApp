@@ -10,7 +10,6 @@ import BottomNavBar, { TabName } from '../components/BottomNavBar';
 import { CreationMode } from '../components/CreateReminderModal';
 import { useReminders } from '../hooks/useReminders';
 import ManualCreateScreen from './ManualCreateScreen';
-import AICreateScreen from './AICreateScreen';
 import ProgressScreen from './ProgressScreen';
 import TimelineScreenV2 from './TimelineScreenV2';
 import SettingsScreen from './SettingsScreen';
@@ -18,7 +17,7 @@ import { CreateReminderInput } from '../lib/types';
 
 const HINT_STORAGE_KEY = '@synco_first_time_hint_shown';
 
-type Screen = 'home' | 'manual-create' | 'ai-create' | 'notifications' | 'timeline' | 'settings';
+type Screen = 'home' | 'manual-create' | 'notifications' | 'timeline' | 'settings';
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
@@ -55,8 +54,8 @@ export default function HomeScreen() {
   }, []);
 
   const handleCreateReminder = useCallback((mode: CreationMode) => {
-    const screen = mode === 'ai' ? 'ai-create' : 'manual-create';
-    setCurrentScreen(screen);
+    // Always use manual-create screen (AI is now integrated in manual screen)
+    setCurrentScreen('manual-create');
     Animated.spring(slideAnim, {
       toValue: 1,
       useNativeDriver: true,
@@ -141,7 +140,7 @@ export default function HomeScreen() {
     outputRange: [SCREEN_WIDTH, 0],
   });
 
-  const showCreateScreen = currentScreen === 'manual-create' || currentScreen === 'ai-create';
+  const showCreateScreen = currentScreen === 'manual-create';
 
   return (
     <View style={styles.root}>
@@ -200,23 +199,6 @@ export default function HomeScreen() {
         pointerEvents={currentScreen === 'manual-create' ? 'auto' : 'none'}
       >
         <ManualCreateScreen
-          onBack={handleBackToHome}
-          onSave={handleSaveReminder}
-        />
-      </Animated.View>
-
-      {/* AI Create Screen - pre-mounted and slides in from right */}
-      <Animated.View
-        style={[
-          styles.createScreenContainer,
-          {
-            transform: [{ translateX: createScreenTranslateX }],
-            opacity: currentScreen === 'ai-create' ? 1 : 0,
-          },
-        ]}
-        pointerEvents={currentScreen === 'ai-create' ? 'auto' : 'none'}
-      >
-        <AICreateScreen
           onBack={handleBackToHome}
           onSave={handleSaveReminder}
         />

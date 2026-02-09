@@ -1,6 +1,6 @@
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useEffect, useRef } from 'react';
-import { SparklesIcon, PlusCircleIcon } from './icons';
+import { PlusCircleIcon } from './icons';
 
 // Animated Option Card Component
 function AnimatedOptionCard({
@@ -121,17 +121,10 @@ export default function CreateReminderModal({ visible, onSelectMode, onClose }: 
       <Pressable style={styles.backdrop} onPress={onClose} />
       <Animated.View style={[styles.content, { transform: [{ translateY: slideAnim }] }]}>
         <AnimatedOptionCard
-          onPress={() => onSelectMode('ai')}
-          icon={<SparklesIcon />}
-          title="Create with AI"
-          description="Describe your day naturally"
-        />
-
-        <AnimatedOptionCard
           onPress={() => onSelectMode('manual')}
           icon={<PlusCircleIcon />}
-          title="Create manually"
-          description="Traditional reminder input"
+          title="Create Reminder"
+          description="Use voice AI or manual input"
           isManual
         />
       </Animated.View>

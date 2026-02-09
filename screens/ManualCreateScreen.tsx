@@ -647,6 +647,7 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
   // Voice mode animations
   const micPositionAnim = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
   const micScaleAnim = useRef(new Animated.Value(1)).current;
+  const micOpacityAnim = useRef(new Animated.Value(1)).current;
   const voiceOverlayOpacity = useRef(new Animated.Value(0)).current;
   const orbPositionAnim = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
   const orbScaleAnim = useRef(new Animated.Value(1)).current;
@@ -700,18 +701,23 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
       Animated.spring(micPositionAnim, {
         toValue: { x: -(SCREEN_WIDTH / 2 - 48 - 24), y: SCREEN_HEIGHT / 3 - 48 },
         useNativeDriver: true,
-        tension: 40,
-        friction: 7,
+        tension: 60,
+        friction: 10,
       }),
       Animated.spring(micScaleAnim, {
-        toValue: 3.5,
+        toValue: 1.8,
         useNativeDriver: true,
-        tension: 40,
-        friction: 7,
+        tension: 60,
+        friction: 10,
+      }),
+      Animated.timing(micOpacityAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
       }),
       Animated.timing(voiceOverlayOpacity, {
         toValue: 1,
-        duration: 400,
+        duration: 350,
         useNativeDriver: true,
       }),
     ]).start(async () => {
@@ -818,14 +824,19 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
               Animated.spring(micPositionAnim, {
                 toValue: { x: 0, y: 0 },
                 useNativeDriver: true,
-                tension: 50,
-                friction: 8,
+                tension: 60,
+                friction: 10,
               }),
               Animated.spring(micScaleAnim, {
                 toValue: 1,
                 useNativeDriver: true,
-                tension: 50,
-                friction: 8,
+                tension: 60,
+                friction: 10,
+              }),
+              Animated.timing(micOpacityAnim, {
+                toValue: 1,
+                duration: 200,
+                useNativeDriver: true,
               }),
               Animated.timing(voiceOverlayOpacity, {
                 toValue: 0,
@@ -1037,14 +1048,19 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
       Animated.spring(micPositionAnim, {
         toValue: { x: 0, y: 0 },
         useNativeDriver: true,
-        tension: 50,
-        friction: 8,
+        tension: 60,
+        friction: 10,
       }),
       Animated.spring(micScaleAnim, {
         toValue: 1,
         useNativeDriver: true,
-        tension: 50,
-        friction: 8,
+        tension: 60,
+        friction: 10,
+      }),
+      Animated.timing(micOpacityAnim, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
       }),
       Animated.spring(orbPositionAnim, {
         toValue: { x: 0, y: 0 },
@@ -1064,7 +1080,7 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
         useNativeDriver: true,
       }),
     ]).start();
-  }, [cancelRecording, micPositionAnim, micScaleAnim, voiceOverlayOpacity, orbPositionAnim, orbScaleAnim]);
+  }, [cancelRecording, micPositionAnim, micScaleAnim, micOpacityAnim, voiceOverlayOpacity, orbPositionAnim, orbScaleAnim]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -1234,6 +1250,7 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
                         { translateY: micPositionAnim.y },
                         { scale: micScaleAnim },
                       ],
+                      opacity: micOpacityAnim,
                     }}
                   >
                     <MicSparkleIcon size={24} />

@@ -89,7 +89,7 @@ function getPriority(reminder: Reminder): number {
 }
 
 // Get action icon based on reminder content
-function getActionIcon(reminder: Reminder): keyof typeof MaterialIcons.glyphMap {
+function getReminderIcon(reminder: Reminder): keyof typeof MaterialIcons.glyphMap {
   const title = reminder.title.toLowerCase();
   if (title.includes('call')) return 'phone';
   if (title.includes('email') || title.includes('send')) return 'email';
@@ -148,7 +148,7 @@ function TaskCard({ reminder, priority, onPress }: { reminder: Reminder; priorit
   const cardOpacity = opacities[priority - 1];
   const shadowStyle = styles[`shadow${shadowLevels[priority - 1]}` as keyof typeof styles];
 
-  const actionIcon = getActionIcon(reminder);
+  const actionIcon = getReminderIcon(reminder);
 
   return (
     <Pressable onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
