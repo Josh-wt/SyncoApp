@@ -216,8 +216,9 @@ function TaskCard({ reminder, priority, onPress }: { reminder: Reminder; priorit
               {actions.slice(0, 3).map(action => (
                 <Pressable
                   key={action.id}
-                  style={styles.actionChip}
+                  style={({ pressed }) => [styles.actionChip, pressed && { opacity: 0.6, transform: [{ scale: 0.9 }] }]}
                   onPress={() => handleActionPress(action)}
+                  hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
                   accessible={true}
                   accessibilityRole="button"
                   accessibilityLabel={`Execute ${action.action_type} action`}
@@ -376,16 +377,20 @@ export default function ProgressScreen({
 
   return (
     <View style={styles.root}>
-      {/* Background glows */}
-      <View style={styles.glowTopRight} />
-      <View style={styles.glowBottomLeft} />
-
       {/* Header buttons */}
       <View style={[styles.header, { paddingTop: insets.top + 24 }]}>
-        <Pressable style={styles.headerButton}>
+        <Pressable
+          style={({ pressed }) => [styles.headerButton, pressed && { opacity: 0.7, transform: [{ scale: 0.92 }] }]}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+        >
           <MaterialIcons name="menu" size={20} color="#121118" />
         </Pressable>
-        <Pressable style={styles.headerButton}>
+        <Pressable
+          style={({ pressed }) => [styles.headerButton, pressed && { opacity: 0.7, transform: [{ scale: 0.92 }] }]}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+        >
           <MaterialIcons name="search" size={20} color="#121118" />
         </Pressable>
       </View>
@@ -399,13 +404,11 @@ export default function ProgressScreen({
       >
         {/* Remmy Character */}
         <View style={styles.remmyContainer}>
-          <View style={styles.remmyCircle}>
-            <Image
-              source={require('../assets/zero.png')}
-              style={styles.remmyImage}
-              resizeMode="contain"
-            />
-          </View>
+          <Image
+            source={require('../assets/zero.png')}
+            style={styles.remmyImage}
+            resizeMode="contain"
+          />
 
           <View style={styles.titleContainer}>
             <Text style={styles.mainTitle}>PROGRESS</Text>
@@ -499,25 +502,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f6f1ff',
   },
-  glowTopRight: {
-    position: 'absolute',
-    top: -160,
-    right: -160,
-    width: 320,
-    height: 320,
-    borderRadius: 160,
-    backgroundColor: 'rgba(47, 0, 255, 0.05)',
-    opacity: 0.9,
-  },
-  glowBottomLeft: {
-    position: 'absolute',
-    bottom: -120,
-    left: -120,
-    width: 240,
-    height: 240,
-    borderRadius: 120,
-    backgroundColor: 'rgba(47, 0, 255, 0.08)',
-  },
   header: {
     position: 'absolute',
     top: 0,
@@ -548,24 +532,10 @@ const styles = StyleSheet.create({
     marginBottom: 32,
     zIndex: 20,
   },
-  remmyCircle: {
+  remmyImage: {
     width: 112,
     height: 112,
-    borderRadius: 56,
-    backgroundColor: '#ffffff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 16,
     marginBottom: 24,
-    shadowColor: '#2F00FF',
-    shadowOpacity: 0.06,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 6,
-  },
-  remmyImage: {
-    width: '100%',
-    height: '100%',
   },
   titleContainer: {
     alignItems: 'center',

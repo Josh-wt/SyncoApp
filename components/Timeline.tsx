@@ -1,4 +1,5 @@
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import TimelineItem from './TimelineItem';
 import { Reminder } from '../lib/types';
 
@@ -17,9 +18,16 @@ export default function Timeline({ reminders, onReminderPress, onViewAllPress }:
     <>
       <View style={styles.timelineHeader}>
         <Text style={styles.timelineTitle}>Upcoming</Text>
-        <TouchableOpacity onPress={onViewAllPress}>
+        <Pressable
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            onViewAllPress?.();
+          }}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          style={({ pressed }) => [pressed && { opacity: 0.6, transform: [{ scale: 0.95 }] }]}
+        >
           <Text style={styles.timelineAction}>View all</Text>
-        </TouchableOpacity>
+        </Pressable>
       </View>
 
       <View style={styles.timelineWrap}>

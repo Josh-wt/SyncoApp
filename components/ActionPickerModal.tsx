@@ -3,6 +3,7 @@ import {
   Animated,
   Dimensions,
   Modal,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -10,8 +11,15 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
+const OPEN_FADE_DURATION = Platform.OS === 'ios' ? 200 : 240;
+const CLOSE_FADE_DURATION = Platform.OS === 'ios' ? 150 : 180;
+const SPRING_CONFIG = Platform.select({
+  ios: { tension: 300, friction: 30 },
+  android: { tension: 220, friction: 26 },
+});
 
 interface ActionOption {
   id: string;
@@ -34,6 +42,7 @@ export default function ActionPickerModal({
   title,
   options,
 }: ActionPickerModalProps) {
+  const insets = useSafeAreaInsets();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
 
@@ -43,13 +52,12 @@ export default function ActionPickerModal({
       Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 1,
-          duration: 200,
+          duration: OPEN_FADE_DURATION,
           useNativeDriver: true,
         }),
         Animated.spring(slideAnim, {
           toValue: 0,
-          tension: 300,
-          friction: 30,
+          ...(SPRING_CONFIG || { tension: 260, friction: 28 }),
           useNativeDriver: true,
         }),
       ]).start();
@@ -57,12 +65,12 @@ export default function ActionPickerModal({
       Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 0,
-          duration: 150,
+          duration: CLOSE_FADE_DURATION,
           useNativeDriver: true,
         }),
         Animated.timing(slideAnim, {
           toValue: SCREEN_HEIGHT,
-          duration: 150,
+          duration: CLOSE_FADE_DURATION,
           useNativeDriver: true,
         }),
       ]).start();
@@ -89,7 +97,6 @@ export default function ActionPickerModal({
       statusBarTranslucent
     >
       <View style={styles.root}>
-        {/* Backdrop */}
         <Animated.View
           style={[
             styles.backdrop,
@@ -104,7 +111,6 @@ export default function ActionPickerModal({
           <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
         </Animated.View>
 
-        {/* Modal content */}
         <Animated.View
           style={[
             styles.modalContainer,
@@ -113,60 +119,42 @@ export default function ActionPickerModal({
             },
           ]}
         >
-          <View style={styles.modal}>
-            {/* Handle bar */}
-            <View style={styles.handleBar} />
+          <View style={[styles.modal, { paddingBottom: insets.bottom + 8 }]}>
+            <View style={styles.handle} />
 
-            {/* Title */}
             <Text style={styles.title} numberOfLines={2}>
               {title}
             </Text>
 
-            {/* Options */}
-            <View style={styles.optionsContainer}>
-              {options.map((option, index) => (
+            <View style={styles.actions}>
+              {options.map((option) => (
                 <Pressable
                   key={option.id}
                   style={({ pressed }) => [
-                    styles.option,
-                    pressed && styles.optionPressed,
-                    index !== options.length - 1 && styles.optionBorder,
+                    styles.actionRow,
+                    pressed && { opacity: 0.7 },
                   ]}
                   onPress={() => handleOptionPress(option)}
+                  accessible={true}
+                  accessibilityRole="button"
+                  accessibilityLabel={option.label}
                 >
-                  <View
-                    style={[
-                      styles.iconContainer,
-                      option.color && { backgroundColor: `${option.color}15` },
-                    ]}
-                  >
-                    <MaterialIcons
-                      name={option.icon}
-                      size={20}
-                      color={option.color || '#2F00FF'}
-                    />
+                  <View style={[styles.iconCircle, { backgroundColor: option.color || '#2F00FF' }]}>
+                    <MaterialIcons name={option.icon} size={24} color="#ffffff" />
                   </View>
-                  <Text
-                    style={[
-                      styles.optionLabel,
-                      option.color && { color: option.color },
-                    ]}
-                  >
-                    {option.label}
-                  </Text>
+                  <Text style={styles.actionText}>{option.label}</Text>
                 </Pressable>
               ))}
             </View>
 
-            {/* Cancel button */}
             <Pressable
               style={({ pressed }) => [
                 styles.cancelButton,
-                pressed && styles.cancelButtonPressed,
+                pressed && { backgroundColor: '#f5f5f5' },
               ]}
               onPress={handleClose}
             >
-              <Text style={styles.cancelText}>CANCEL</Text>
+              <Text style={styles.cancelText}>Cancel</Text>
             </Pressable>
           </View>
         </Animated.View>
@@ -185,83 +173,70 @@ const styles = StyleSheet.create({
     backgroundColor: '#000000',
   },
   modalContainer: {
-    paddingHorizontal: 16,
-    paddingBottom: 32,
+    paddingHorizontal: 20,
   },
   modal: {
     backgroundColor: '#ffffff',
-    borderRadius: 24,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 30,
-    shadowOffset: { width: 0, height: -5 },
-    elevation: 10,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingTop: 12,
+    paddingBottom: 8,
+    shadowColor: Platform.OS === 'ios' ? '#000' : undefined,
+    shadowOpacity: Platform.OS === 'ios' ? 0.2 : 0,
+    shadowRadius: Platform.OS === 'ios' ? 24 : 0,
+    shadowOffset: Platform.OS === 'ios' ? { width: 0, height: -4 } : { width: 0, height: 0 },
+    elevation: Platform.OS === 'android' ? 12 : 0,
   },
-  handleBar: {
-    width: 36,
+  handle: {
+    width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#e0e0e0',
+    backgroundColor: '#d1d5db',
     alignSelf: 'center',
-    marginTop: 12,
     marginBottom: 20,
   },
   title: {
     fontSize: 20,
     fontFamily: 'BricolageGrotesque-Bold',
+    letterSpacing: -0.3,
     color: '#121118',
     textAlign: 'center',
+    marginBottom: 24,
     paddingHorizontal: 24,
-    marginBottom: 20,
-    letterSpacing: 0.5,
   },
-  optionsContainer: {
+  actions: {
+    gap: 2,
     paddingHorizontal: 8,
   },
-  option: {
+  actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 16,
     paddingHorizontal: 16,
     gap: 16,
   },
-  optionPressed: {
-    backgroundColor: '#f8f8f8',
-  },
-  optionBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  iconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(47, 0, 255, 0.1)',
+  iconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  optionLabel: {
-    flex: 1,
-    fontSize: 16,
+  actionText: {
+    fontSize: 17,
     fontFamily: 'BricolageGrotesque-Medium',
-    color: '#121118',
-    letterSpacing: 0.3,
+    letterSpacing: -0.2,
+    color: '#1a1a1a',
+    flex: 1,
   },
   cancelButton: {
-    marginTop: 16,
+    marginTop: 8,
     paddingVertical: 16,
     alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-  },
-  cancelButtonPressed: {
-    backgroundColor: '#f8f8f8',
   },
   cancelText: {
-    fontSize: 12,
-    fontFamily: 'BricolageGrotesque-Bold',
-    color: '#888888',
-    letterSpacing: 2,
+    fontSize: 16,
+    fontFamily: 'BricolageGrotesque-Medium',
+    color: '#9ca3af',
   },
 });

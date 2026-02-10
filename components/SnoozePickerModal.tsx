@@ -142,8 +142,10 @@ export default function SnoozePickerModal({
                     styles.option,
                     pressed && styles.optionPressed,
                     index !== SNOOZE_OPTIONS.length - 1 && styles.optionBorder,
+                    pressed && { transform: [{ scale: 0.97 }] },
                   ]}
                   onPress={() => handleSelect(option.minutes)}
+                  hitSlop={{ top: 4, bottom: 4, left: 8, right: 8 }}
                 >
                   <View style={styles.optionContent}>
                     <View style={styles.timeIndicator}>

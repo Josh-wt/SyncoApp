@@ -168,6 +168,11 @@ export interface UserPreferences {
   notification_vibration: boolean;
   priority_notification_sound: boolean;
   default_notify_before_minutes: number;
+  // Snooze preferences
+  default_snooze_minutes: number;
+  snooze_preset_values: number[];
+  // Quick reminder templates
+  quick_reminder_templates: string[];
   // Appearance preferences
   theme: ThemeMode;
   accent_color: string;
@@ -190,6 +195,11 @@ export interface UpdateUserPreferencesInput {
   notification_vibration?: boolean;
   priority_notification_sound?: boolean;
   default_notify_before_minutes?: number;
+  // Snooze preferences
+  default_snooze_minutes?: number;
+  snooze_preset_values?: number[];
+  // Quick reminder templates
+  quick_reminder_templates?: string[];
   // Appearance preferences
   theme?: ThemeMode;
   accent_color?: string;

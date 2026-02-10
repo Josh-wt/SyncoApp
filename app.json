@@ -59,7 +59,8 @@
           "color": "#2F00FF"
         }
       ],
-      "expo-build-properties"
+      "expo-build-properties",
+      "./plugins/disable-gradle-config-cache"
     ],
     "extra": {
       "eas": {

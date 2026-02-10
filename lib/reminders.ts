@@ -19,6 +19,7 @@ export async function getAllFutureReminders(): Promise<Reminder[]> {
     .from('reminders')
     .select('*')
     .gte('scheduled_time', startOfDay)
+    .or('status.is.null,status.neq.completed')
     .order('scheduled_time', { ascending: true });
 
   if (error) throw error;

@@ -33,6 +33,7 @@ function AnimatedFAB({ onPress }: { onPress: () => void }) {
       onPress={onPress}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
+      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
       accessible={true}
       accessibilityRole="button"
       accessibilityLabel="Create new reminder"
@@ -66,7 +67,7 @@ function AnimatedNavIcon({
 
   const handlePressIn = () => {
     Animated.spring(scaleAnim, {
-      toValue: 0.85,
+      toValue: 0.92,
       useNativeDriver: true,
       tension: 400,
       friction: 10,
@@ -87,6 +88,7 @@ function AnimatedNavIcon({
       onPress={onPress}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
+      hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
       accessible={true}
       accessibilityRole="button"
       accessibilityLabel={label}

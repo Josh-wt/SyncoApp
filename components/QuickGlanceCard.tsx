@@ -204,6 +204,7 @@ export default function QuickGlanceCard({ onGiftPress }: QuickGlanceCardProps) {
                 pressed && styles.giftButtonPressed,
               ]}
               onPress={onGiftPress}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
               <Image
                 source={require('../assets/zero.png')}

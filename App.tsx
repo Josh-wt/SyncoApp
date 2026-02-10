@@ -11,6 +11,8 @@ import {
   setupNotificationReceivedHandler,
   syncLocalReminderSchedules,
 } from './lib/notifications';
+import { getUserPreferences } from './lib/userPreferences';
+import { updateReminderStatus } from './lib/reminders';
 import { ThemeProvider } from './contexts/ThemeContext';
 import HomeScreen from './screens/HomeScreen';
 import OnboardingScreen from './screens/OnboardingScreen';
@@ -34,8 +36,12 @@ export default function App() {
   const notificationResponseListener = useRef<Notifications.EventSubscription | null>(null);
   const notificationReceivedListener = useRef<Notifications.EventSubscription | null>(null);
 
-  // Removed preload to prevent crash during auth redirect
-  // expo-audio and expo-file-system will be loaded when needed
+  // Preload native modules to prevent reload on first use
+  useEffect(() => {
+    // Preload expo-audio and expo-file-system modules
+    import('expo-audio').catch(() => {});
+    import('expo-file-system').catch(() => {});
+  }, []);
 
   // Auth session effect
   useEffect(() => {
@@ -68,7 +74,12 @@ export default function App() {
       try {
         await initializeNotifications();
 
-        await setupNotificationCategory();
+        // Load user preferences to configure snooze mode
+        const prefs = await getUserPreferences();
+        await setupNotificationCategory(
+          prefs?.snooze_mode ?? 'text_input',
+          prefs?.snooze_preset_values ?? [5, 10, 15, 30]
+        );
         console.log('Notification category configured successfully');
 
         await syncLocalReminderSchedules();
@@ -77,9 +88,19 @@ export default function App() {
           console.log('Foreground notification received:', notification.request.content.data);
         });
 
-        notificationResponseListener.current = setupNotificationResponseHandler((reminderId) => {
-          console.log('Notification tapped for reminder:', reminderId);
-        });
+        notificationResponseListener.current = setupNotificationResponseHandler(
+          (reminderId) => {
+            console.log('Notification tapped for reminder:', reminderId);
+          },
+          async (reminderId) => {
+            try {
+              await updateReminderStatus(reminderId, 'completed');
+              console.log('Reminder marked as done from notification:', reminderId);
+            } catch (error) {
+              console.error('Failed to mark reminder as done:', error);
+            }
+          }
+        );
       } catch (error) {
         console.error('Failed to initialize notifications:', error);
       }

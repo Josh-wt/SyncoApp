@@ -1,8 +1,21 @@
-import { useState, useRef } from 'react';
-import { Image, Pressable, StyleSheet, Text, useWindowDimensions, View, Animated } from 'react-native';
+import { useState, useRef, useEffect } from 'react';
+import {
+  Image,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+  Animated,
+  ActivityIndicator,
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
+import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import * as AppleAuthentication from 'expo-apple-authentication';
+import { signInWithGoogle, signInWithApple } from '../lib/auth';
 
 interface OnboardingScreenProps {
   onSkip?: () => void;
@@ -10,72 +23,426 @@ interface OnboardingScreenProps {
 
 const SLIDES = [
   {
-    title: 'Never forget what matters',
+    title: 'Never forget\nwhat matters',
     image: require('../assets/zero.png'),
     topImage: null,
     isIntro: true,
   },
   {
-    title: 'Create reminders seemlessly with full control',
+    title: 'Create reminders seamlessly with full control',
     image: require('../assets/one.png'),
     topImage: require('../assets/onetop.png'),
   },
   {
-    title: 'Your reminders, everywhere you are',
+    title: 'Smart snooze\nthat works for you',
+    image: require('../assets/two.png'),
+    topImage: null,
+  },
+  {
+    title: 'Your reminders,\neverywhere',
     image: require('../assets/twoo.png'),
-    topImage: require('../assets/onetop.png'),
+    topImage: null,
   },
 ];
+
+// Animated dot component for smooth transitions
+function AnimatedDot({ active }: { active: boolean }) {
+  const widthAnim = useRef(new Animated.Value(active ? 24 : 8)).current;
+  const opacityAnim = useRef(new Animated.Value(active ? 1 : 0.35)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(widthAnim, {
+        toValue: active ? 24 : 8,
+        useNativeDriver: false,
+        tension: 300,
+        friction: 15,
+      }),
+      Animated.timing(opacityAnim, {
+        toValue: active ? 1 : 0.35,
+        duration: 250,
+        useNativeDriver: false,
+      }),
+    ]).start();
+  }, [active]);
+
+  return (
+    <Animated.View
+      style={[
+        styles.dot,
+        {
+          width: widthAnim,
+          backgroundColor: opacityAnim.interpolate({
+            inputRange: [0.35, 1],
+            outputRange: ['rgba(255, 255, 255, 0.35)', '#ffffff'],
+          }),
+        },
+      ]}
+    />
+  );
+}
 
 export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
   const { width, height } = useWindowDimensions();
   const [currentSlide, setCurrentSlide] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [isAppleAuthAvailable, setIsAppleAuthAvailable] = useState(false);
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
+  const buttonScaleAnim = useRef(new Animated.Value(1)).current;
+
+  // Sign-in page animations
+  const signInLogoAnim = useRef(new Animated.Value(0)).current;
+  const signInTitleAnim = useRef(new Animated.Value(0)).current;
+  const signInButtonsAnim = useRef(new Animated.Value(0)).current;
+  const signInTermsAnim = useRef(new Animated.Value(0)).current;
+
+  // Auth button press animations
+  const appleScaleAnim = useRef(new Animated.Value(1)).current;
+  const googleScaleAnim = useRef(new Animated.Value(1)).current;
+
+  const isSignInSlide = currentSlide === SLIDES.length;
+  const totalSlides = SLIDES.length + 1; // +1 for sign-in slide
+
+  useEffect(() => {
+    if (Platform.OS === 'ios') {
+      AppleAuthentication.isAvailableAsync().then(setIsAppleAuthAvailable);
+    }
+  }, []);
+
+  // Staggered entry animation for sign-in slide
+  useEffect(() => {
+    if (isSignInSlide) {
+      signInLogoAnim.setValue(0);
+      signInTitleAnim.setValue(0);
+      signInButtonsAnim.setValue(0);
+      signInTermsAnim.setValue(0);
+
+      Animated.stagger(120, [
+        Animated.spring(signInLogoAnim, {
+          toValue: 1,
+          useNativeDriver: true,
+          tension: 60,
+          friction: 8,
+        }),
+        Animated.spring(signInTitleAnim, {
+          toValue: 1,
+          useNativeDriver: true,
+          tension: 60,
+          friction: 8,
+        }),
+        Animated.spring(signInButtonsAnim, {
+          toValue: 1,
+          useNativeDriver: true,
+          tension: 60,
+          friction: 8,
+        }),
+        Animated.spring(signInTermsAnim, {
+          toValue: 1,
+          useNativeDriver: true,
+          tension: 60,
+          friction: 8,
+        }),
+      ]).start();
+    }
+  }, [isSignInSlide]);
 
   const handleNext = () => {
-    if (currentSlide < SLIDES.length - 1) {
+    if (currentSlide < SLIDES.length) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
       // Animate out current slide
       Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 0,
-          duration: 300,
+          duration: 250,
           useNativeDriver: true,
         }),
         Animated.timing(slideAnim, {
-          toValue: -50,
-          duration: 300,
+          toValue: -40,
+          duration: 250,
           useNativeDriver: true,
         }),
       ]).start(() => {
-        // Change slide
         setCurrentSlide(currentSlide + 1);
+        slideAnim.setValue(40);
 
-        // Reset animation values
-        slideAnim.setValue(50);
-
-        // Animate in new slide
         Animated.parallel([
-          Animated.timing(fadeAnim, {
+          Animated.spring(fadeAnim, {
             toValue: 1,
-            duration: 300,
             useNativeDriver: true,
+            tension: 80,
+            friction: 12,
           }),
-          Animated.timing(slideAnim, {
+          Animated.spring(slideAnim, {
             toValue: 0,
-            duration: 300,
             useNativeDriver: true,
+            tension: 80,
+            friction: 12,
           }),
         ]).start();
       });
-    } else {
-      onSkip?.();
     }
   };
 
+  const handleButtonPressIn = () => {
+    Animated.spring(buttonScaleAnim, {
+      toValue: 0.95,
+      useNativeDriver: true,
+      tension: 400,
+      friction: 10,
+    }).start();
+  };
+
+  const handleButtonPressOut = () => {
+    Animated.spring(buttonScaleAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      tension: 400,
+      friction: 10,
+    }).start();
+  };
+
+  const handleAuthPressIn = (anim: Animated.Value) => {
+    Animated.spring(anim, {
+      toValue: 0.96,
+      useNativeDriver: true,
+      tension: 400,
+      friction: 10,
+    }).start();
+  };
+
+  const handleAuthPressOut = (anim: Animated.Value) => {
+    Animated.spring(anim, {
+      toValue: 1,
+      useNativeDriver: true,
+      tension: 400,
+      friction: 10,
+    }).start();
+  };
+
+  const handleGoogleSignIn = async () => {
+    setLoading(true);
+    setAuthError(null);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    try {
+      await signInWithGoogle();
+    } catch (err) {
+      setAuthError(err instanceof Error ? err.message : 'Failed to sign in');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAppleSignIn = async () => {
+    setLoading(true);
+    setAuthError(null);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    try {
+      await signInWithApple();
+    } catch (err) {
+      setAuthError(err instanceof Error ? err.message : 'Failed to sign in');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Sign-in slide
+  if (isSignInSlide) {
+    return (
+      <View style={styles.container}>
+        <Image
+          source={require('../assets/onboarding-bg.png')}
+          style={[styles.pngBackground, { width, height }]}
+          resizeMode="cover"
+        />
+
+        <View style={[styles.signInContainer, { paddingTop: height * 0.18 }]}>
+          {/* Logo */}
+          <Animated.View
+            style={{
+              opacity: signInLogoAnim,
+              transform: [
+                {
+                  translateY: signInLogoAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [30, 0],
+                  }),
+                },
+                {
+                  scale: signInLogoAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0.8, 1],
+                  }),
+                },
+              ],
+            }}
+          >
+            <Image
+              source={require('../assets/zero.png')}
+              style={{ width: width * 0.3, height: width * 0.3 }}
+              resizeMode="contain"
+            />
+          </Animated.View>
+
+          {/* Title */}
+          <Animated.View
+            style={{
+              opacity: signInTitleAnim,
+              transform: [
+                {
+                  translateY: signInTitleAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [20, 0],
+                  }),
+                },
+              ],
+              marginTop: 28,
+              alignItems: 'center',
+            }}
+          >
+            <Text style={styles.signInTitle}>Get started</Text>
+            <Text style={styles.signInSubtitle}>
+              Sign in to sync your reminders across devices
+            </Text>
+          </Animated.View>
+
+          {/* Auth Buttons */}
+          <Animated.View
+            style={{
+              opacity: signInButtonsAnim,
+              transform: [
+                {
+                  translateY: signInButtonsAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [20, 0],
+                  }),
+                },
+              ],
+              marginTop: 40,
+              width: '100%',
+              paddingHorizontal: 24,
+              gap: 12,
+            }}
+          >
+            {/* Apple Sign In */}
+            {isAppleAuthAvailable && (
+              <Animated.View style={{ transform: [{ scale: appleScaleAnim }] }}>
+                <Pressable
+                  onPress={handleAppleSignIn}
+                  onPressIn={() => handleAuthPressIn(appleScaleAnim)}
+                  onPressOut={() => handleAuthPressOut(appleScaleAnim)}
+                  disabled={loading}
+                  style={styles.authButtonOuter}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <BlurView intensity={25} tint="dark" style={styles.authBlur}>
+                    <LinearGradient
+                      colors={['#1a1a1a', '#000000']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 0, y: 1 }}
+                      style={styles.authGradient}
+                    >
+                      <LinearGradient
+                        colors={['rgba(255, 255, 255, 0.15)', 'rgba(255, 255, 255, 0)']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 0, y: 0.5 }}
+                        style={styles.highlightTop}
+                      />
+                      {loading ? (
+                        <ActivityIndicator color="#ffffff" />
+                      ) : (
+                        <View style={styles.authContent}>
+                          <Ionicons name="logo-apple" size={22} color="#ffffff" />
+                          <Text style={styles.authButtonText}>Continue with Apple</Text>
+                        </View>
+                      )}
+                    </LinearGradient>
+                  </BlurView>
+                </Pressable>
+              </Animated.View>
+            )}
+
+            {/* Google Sign In */}
+            <Animated.View style={{ transform: [{ scale: googleScaleAnim }] }}>
+              <Pressable
+                onPress={handleGoogleSignIn}
+                onPressIn={() => handleAuthPressIn(googleScaleAnim)}
+                onPressOut={() => handleAuthPressOut(googleScaleAnim)}
+                disabled={loading}
+                style={styles.authButtonOuter}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <BlurView intensity={25} tint="light" style={styles.authBlur}>
+                  <LinearGradient
+                    colors={['#ffffff', '#f5f5f5']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 0, y: 1 }}
+                    style={styles.authGradient}
+                  >
+                    <LinearGradient
+                      colors={['rgba(255, 255, 255, 0.8)', 'rgba(255, 255, 255, 0)']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 0, y: 0.5 }}
+                      style={styles.highlightTop}
+                    />
+                    {loading ? (
+                      <ActivityIndicator color="#2F00FF" />
+                    ) : (
+                      <View style={styles.authContent}>
+                        <Ionicons name="logo-google" size={20} color="#4285F4" />
+                        <Text style={[styles.authButtonText, { color: '#1a1a1a' }]}>
+                          Continue with Google
+                        </Text>
+                      </View>
+                    )}
+                  </LinearGradient>
+                </BlurView>
+              </Pressable>
+            </Animated.View>
+
+            {authError && (
+              <View style={styles.errorContainer}>
+                <Text style={styles.errorText}>{authError}</Text>
+              </View>
+            )}
+          </Animated.View>
+
+          {/* Dots + Terms */}
+          <Animated.View
+            style={{
+              opacity: signInTermsAnim,
+              transform: [
+                {
+                  translateY: signInTermsAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [10, 0],
+                  }),
+                },
+              ],
+              marginTop: 36,
+              alignItems: 'center',
+            }}
+          >
+            <View style={styles.dotsRow}>
+              {Array.from({ length: totalSlides }).map((_, index) => (
+                <AnimatedDot key={index} active={index === currentSlide} />
+              ))}
+            </View>
+
+            <Text style={styles.termsText}>
+              By continuing, you agree to our Terms of Service and Privacy Policy
+            </Text>
+          </Animated.View>
+        </View>
+      </View>
+    );
+  }
+
   const slide = SLIDES[currentSlide];
+  const isSnoozeSlide = currentSlide === 2;
+  const isSyncSlide = currentSlide === 3;
 
   return (
     <View style={styles.container}>
@@ -86,7 +453,16 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
       />
 
       {slide.topImage && (
-        <View style={[styles.oneImageWrap, { top: height * 0.07, alignItems: 'flex-start', paddingLeft: (width - width * 0.987376) / 2 - width * 0.055 }]}>
+        <View
+          style={[
+            styles.oneImageWrap,
+            {
+              top: height * 0.07,
+              alignItems: 'flex-start',
+              paddingLeft: (width - width * 0.987376) / 2 - width * 0.055,
+            },
+          ]}
+        >
           <Image
             source={slide.topImage}
             style={[styles.oneImage, { width: width * 0.987376, height: width * 0.987376 }]}
@@ -99,10 +475,16 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
         style={[
           styles.oneImageWrap,
           {
-            top: slide.isIntro ? height * 0.25 : (currentSlide === 2 ? height * 0.39 : height * 0.38),
+            top: slide.isIntro
+              ? height * 0.25
+              : isSnoozeSlide
+              ? height * 0.2
+              : isSyncSlide
+              ? height * 0.18
+              : height * 0.38,
             opacity: fadeAnim,
             transform: [{ translateY: slideAnim }],
-          }
+          },
         ]}
       >
         <Image
@@ -110,16 +492,32 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
           style={[
             styles.oneImage,
             {
-              width: slide.isIntro ? width * 0.5 : (currentSlide === 0.5 ? width * 5 : width * 1.3),
-              height: slide.isIntro ? width * 0.5 : (currentSlide === 0.5 ? width * 3 : width * 1.2)
-            }
+              width: slide.isIntro
+                ? width * 0.5
+                : isSnoozeSlide
+                ? width * 0.75
+                : isSyncSlide
+                ? width * 0.9
+                : width * 1.3,
+              height: slide.isIntro
+                ? width * 0.5
+                : isSnoozeSlide
+                ? width * 1.1
+                : isSyncSlide
+                ? width * 0.65
+                : width * 1.2,
+            },
           ]}
           resizeMode="contain"
         />
       </Animated.View>
 
       <View style={[styles.skipWrap, { top: 52, right: 20 }]}>
-        <Pressable onPress={onSkip} style={styles.skipButton}>
+        <Pressable
+          onPress={onSkip}
+          style={styles.skipButton}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
           <Text style={styles.skipText}>Skip</Text>
         </Pressable>
       </View>
@@ -127,19 +525,21 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
       <Animated.View
         style={[
           styles.textBlock,
-          slide.isIntro ? {
-            left: 24,
-            right: 24,
-            top: height * 0.25 + width * 0.8 + 24,
-            opacity: fadeAnim,
-            transform: [{ translateY: slideAnim }],
-          } : {
-            left: 24,
-            right: 24,
-            bottom: 120,
-            opacity: fadeAnim,
-            transform: [{ translateY: slideAnim }],
-          }
+          slide.isIntro
+            ? {
+                left: 24,
+                right: 24,
+                top: height * 0.25 + width * 0.8 + 24,
+                opacity: fadeAnim,
+                transform: [{ translateY: slideAnim }],
+              }
+            : {
+                left: 24,
+                right: 24,
+                bottom: 120,
+                opacity: fadeAnim,
+                transform: [{ translateY: slideAnim }],
+              },
         ]}
       >
         <Text style={[styles.headline, slide.isIntro && { textAlign: 'center', fontSize: 24 }]}>
@@ -147,64 +547,48 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
         </Text>
         {!slide.isIntro && (
           <View style={styles.dotsRow}>
-            {SLIDES.map((_, index) => (
-              <View
-                key={index}
-                style={[
-                  styles.dot,
-                  index === currentSlide && styles.dotActive
-                ]}
-              />
+            {Array.from({ length: totalSlides }).map((_, index) => (
+              <AnimatedDot key={index} active={index === currentSlide} />
             ))}
           </View>
         )}
       </Animated.View>
 
       <View style={[styles.buttonWrap, { left: 20, right: 20, bottom: 36 }]}>
-        <Pressable onPress={handleNext} style={styles.primaryButton}>
-          {/* Blur Layer for Glassmorphism */}
-          <BlurView intensity={30} tint="light" style={styles.blurLayer}>
-            {/* Main Gradient */}
-            <LinearGradient
-              colors={['#2F00FF', '#2F00FF', '#2F00FF']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 0, y: 1 }}
-              style={styles.gradientButton}
-            >
-              {/* Top Highlight */}
+        <Animated.View style={{ transform: [{ scale: buttonScaleAnim }] }}>
+          <Pressable
+            onPress={handleNext}
+            onPressIn={handleButtonPressIn}
+            onPressOut={handleButtonPressOut}
+            style={styles.primaryButton}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <BlurView intensity={30} tint="light" style={styles.blurLayer}>
               <LinearGradient
-                colors={['rgba(255, 255, 255, 0.4)', 'rgba(255, 255, 255, 0)']}
+                colors={['#2F00FF', '#2F00FF', '#2F00FF']}
                 start={{ x: 0, y: 0 }}
-                end={{ x: 0, y: 0.5 }}
-                style={styles.highlightTop}
-              />
-              {/* Bottom Highlight */}
-              <LinearGradient
-                colors={['rgba(255, 255, 255, 0)', 'rgba(255, 255, 255, 0.4)']}
-                start={{ x: 0, y: 0.5 }}
                 end={{ x: 0, y: 1 }}
-                style={styles.highlightBottom}
-              />
-              {/* Left Highlight */}
-              <LinearGradient
-                colors={['rgba(255, 255, 255, 0.4)', 'rgba(255, 255, 255, 0)']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.highlightLeft}
-              />
-              {/* Right Highlight */}
-              <LinearGradient
-                colors={['rgba(255, 255, 255, 0)', 'rgba(255, 255, 255, 0.4)']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.highlightRight}
-              />
-              <Text style={styles.primaryButtonText}>
-                {currentSlide === 0 ? 'Start' : (currentSlide === SLIDES.length - 1 ? 'Get Started' : 'Next')}
-              </Text>
-            </LinearGradient>
-          </BlurView>
-        </Pressable>
+                style={styles.gradientButton}
+              >
+                <LinearGradient
+                  colors={['rgba(255, 255, 255, 0.4)', 'rgba(255, 255, 255, 0)']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 0, y: 0.5 }}
+                  style={styles.highlightTop}
+                />
+                <LinearGradient
+                  colors={['rgba(255, 255, 255, 0)', 'rgba(255, 255, 255, 0.4)']}
+                  start={{ x: 0, y: 0.5 }}
+                  end={{ x: 0, y: 1 }}
+                  style={styles.highlightBottom}
+                />
+                <Text style={styles.primaryButtonText}>
+                  {currentSlide === 0 ? 'Start' : 'Next'}
+                </Text>
+              </LinearGradient>
+            </BlurView>
+          </Pressable>
+        </Animated.View>
       </View>
     </View>
   );
@@ -227,9 +611,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     zIndex: 2,
   },
-  oneImage: {
-    // No max constraints - size controlled by inline styles
-  },
+  oneImage: {},
   skipWrap: {
     position: 'absolute',
     zIndex: 5,
@@ -261,15 +643,9 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   dot: {
-    width: 8,
     height: 8,
-    borderRadius: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.35)',
-  },
-  dotActive: {
-    width: 24,
     borderRadius: 6,
-    backgroundColor: '#ffffff',
+    backgroundColor: 'rgba(255, 255, 255, 0.35)',
   },
   buttonWrap: {
     position: 'absolute',
@@ -282,7 +658,7 @@ const styles = StyleSheet.create({
   blurLayer: {
     borderRadius: 100,
     overflow: 'hidden',
-    borderWidth: .5,
+    borderWidth: 0.5,
     borderColor: 'rgba(0, 0, 0, 0.6)',
   },
   gradientButton: {
@@ -309,27 +685,88 @@ const styles = StyleSheet.create({
     height: '50%',
     borderRadius: 100,
   },
-  highlightLeft: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: 0,
-    width: '0%',
-    borderRadius: 100,
-  },
-  highlightRight: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    right: 0,
-    width: '0%',
-    borderRadius: 100,
-  },
   primaryButtonText: {
     color: '#ffffff',
     fontSize: 18,
     fontFamily: 'BricolageGrotesque-Bold',
     letterSpacing: 0.5,
     zIndex: 1,
+  },
+
+  // Sign-in slide styles
+  signInContainer: {
+    flex: 1,
+    alignItems: 'center',
+    zIndex: 3,
+  },
+  signInTitle: {
+    color: '#ffffff',
+    fontSize: 30,
+    fontFamily: 'BricolageGrotesque-Bold',
+    textAlign: 'center',
+    letterSpacing: -0.5,
+  },
+  signInSubtitle: {
+    color: 'rgba(255, 255, 255, 0.6)',
+    fontSize: 15,
+    fontFamily: 'BricolageGrotesque-Regular',
+    textAlign: 'center',
+    marginTop: 8,
+    lineHeight: 22,
+    paddingHorizontal: 32,
+  },
+
+  // Auth button styles (CTA style with BlurView + LinearGradient)
+  authButtonOuter: {
+    borderRadius: 100,
+  },
+  authBlur: {
+    borderRadius: 100,
+    overflow: 'hidden',
+    borderWidth: 0.5,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  authGradient: {
+    paddingVertical: 18,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 100,
+    position: 'relative',
+  },
+  authContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    zIndex: 1,
+  },
+  authButtonText: {
+    fontSize: 16,
+    fontFamily: 'BricolageGrotesque-Bold',
+    color: '#ffffff',
+    letterSpacing: 0.3,
+  },
+
+  errorContainer: {
+    backgroundColor: 'rgba(220, 38, 38, 0.15)',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(220, 38, 38, 0.3)',
+  },
+  errorText: {
+    fontSize: 14,
+    fontFamily: 'BricolageGrotesque-Regular',
+    color: '#fca5a5',
+    textAlign: 'center',
+  },
+  termsText: {
+    fontSize: 12,
+    fontFamily: 'BricolageGrotesque-Regular',
+    color: 'rgba(255, 255, 255, 0.4)',
+    textAlign: 'center',
+    marginTop: 24,
+    lineHeight: 18,
+    paddingHorizontal: 40,
   },
 });

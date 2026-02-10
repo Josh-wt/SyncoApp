@@ -1,5 +1,6 @@
 import { useRef } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { Reminder, ReminderStatus } from '../lib/types';
 
 export type { Reminder, ReminderStatus };
@@ -134,9 +135,13 @@ export default function TimelineItem({ reminder, onPress }: TimelineItemProps) {
 
   return (
     <Pressable
-      onPress={() => onPress?.(reminder)}
+      onPress={() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        onPress?.(reminder);
+      }}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
+      hitSlop={{ top: 6, bottom: 6, left: 8, right: 8 }}
     >
       <Animated.View
         style={[

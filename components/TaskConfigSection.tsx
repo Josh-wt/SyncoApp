@@ -1,10 +1,15 @@
 import { useRef, useState } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, LayoutAnimation, Platform, Pressable, StyleSheet, Text, UIManager, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { useTheme } from '../contexts/ThemeContext';
+import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
 import ActionInputModal from './ActionInputModal';
 import { ReminderActionType } from '../lib/types';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 export interface QuickAction {
   type: ReminderActionType;
@@ -17,56 +22,63 @@ interface TaskConfigSectionProps {
   onRepeatChange?: (repeat: any) => void;
 }
 
-const quickActionTypes = [
-  { type: 'call', icon: 'phone', label: 'Call' },
-  { type: 'link', icon: 'link', label: 'Link' },
-  { type: 'location', icon: 'location-on', label: 'Location' },
-  { type: 'email', icon: 'email', label: 'Email' },
-  { type: 'note', icon: 'description', label: 'Note' },
-  { type: 'assign', icon: 'people', label: 'Assign' },
-  { type: 'photo', icon: 'photo-camera', label: 'Photo' },
-  { type: 'voice', icon: 'mic', label: 'Voice' },
-  { type: 'subtasks', icon: 'checklist', label: 'Subtasks' },
-] as const;
+const QUICK_ACTIONS: {
+  type: ReminderActionType;
+  icon: keyof typeof MaterialIcons.glyphMap;
+  label: string;
+  color: string;
+}[] = [
+  { type: 'call', icon: 'phone', label: 'Call', color: '#10b981' },
+  { type: 'link', icon: 'link', label: 'Link', color: '#3b82f6' },
+  { type: 'location', icon: 'location-on', label: 'Location', color: '#f59e0b' },
+  { type: 'email', icon: 'email', label: 'Email', color: '#8b5cf6' },
+  { type: 'note', icon: 'description', label: 'Note', color: '#6b7280' },
+  { type: 'subtasks', icon: 'checklist', label: 'Subtasks', color: '#2F00FF' },
+];
 
-export default function TaskConfigSection({ onActionsChange, onRepeatChange }: TaskConfigSectionProps) {
-  const { theme } = useTheme();
-  const [isExpanded, setIsExpanded] = useState(false);
+function getActionPreview(type: ReminderActionType, value: any): string {
+  switch (type) {
+    case 'call':
+      return value?.phone || 'Phone number';
+    case 'link':
+      return value?.url?.replace(/^https?:\/\//, '').slice(0, 30) || 'URL';
+    case 'email':
+      return value?.email || 'Email address';
+    case 'location':
+      return value?.address?.slice(0, 30) || 'Address';
+    case 'note':
+      return value?.text?.slice(0, 30) || 'Note';
+    case 'subtasks':
+      return value?.text ? `${value.text.split('\n').filter((l: string) => l.trim()).length} items` : 'Subtasks';
+    default:
+      return type;
+  }
+}
+
+export default function TaskConfigSection({ onActionsChange }: TaskConfigSectionProps) {
+  const [expanded, setExpanded] = useState(false);
   const [selectedActions, setSelectedActions] = useState<Set<string>>(new Set());
   const [actionValues, setActionValues] = useState<Map<string, any>>(new Map());
   const [showActionModal, setShowActionModal] = useState(false);
   const [selectedActionType, setSelectedActionType] = useState<ReminderActionType | null>(null);
-  const heightAnim = useRef(new Animated.Value(0)).current;
+  const [attachments, setAttachments] = useState<any[]>([]);
   const rotateAnim = useRef(new Animated.Value(0)).current;
 
-  const toggleExpand = () => {
+  const toggleExpanded = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
-    const toValue = isExpanded ? 0 : 1;
-
-    Animated.parallel([
-      Animated.spring(heightAnim, {
-        toValue,
-        useNativeDriver: false,
-        tension: 100,
-        friction: 10,
-      }),
-      Animated.spring(rotateAnim, {
-        toValue,
-        useNativeDriver: true,
-        tension: 100,
-        friction: 10,
-      }),
-    ]).start();
-
-    setIsExpanded(!isExpanded);
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setExpanded(!expanded);
+    Animated.timing(rotateAnim, {
+      toValue: expanded ? 0 : 1,
+      duration: 200,
+      useNativeDriver: true,
+    }).start();
   };
 
   const toggleAction = (type: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     if (selectedActions.has(type)) {
-      // Remove action
       const newSelected = new Set(selectedActions);
       newSelected.delete(type);
       setSelectedActions(newSelected);
@@ -75,7 +87,6 @@ export default function TaskConfigSection({ onActionsChange, onRepeatChange }: T
       newValues.delete(type);
       setActionValues(newValues);
 
-      // Notify parent
       if (onActionsChange) {
         const actions = Array.from(newValues.entries()).map(([actionType, val]) => ({
           type: actionType as ReminderActionType,
@@ -84,7 +95,6 @@ export default function TaskConfigSection({ onActionsChange, onRepeatChange }: T
         onActionsChange(actions);
       }
     } else {
-      // Open modal to get input
       setSelectedActionType(type as ReminderActionType);
       setShowActionModal(true);
     }
@@ -101,7 +111,6 @@ export default function TaskConfigSection({ onActionsChange, onRepeatChange }: T
     newSelected.add(selectedActionType);
     setSelectedActions(newSelected);
 
-    // Notify parent
     if (onActionsChange) {
       const actions = Array.from(newValues.entries()).map(([type, val]) => ({
         type: type as ReminderActionType,
@@ -111,139 +120,187 @@ export default function TaskConfigSection({ onActionsChange, onRepeatChange }: T
     }
   };
 
-  const rotate = rotateAnim.interpolate({
+  const handleAddAttachment = async (type: 'image' | 'file') => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    if (type === 'image') {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets[0]) {
+        setAttachments([...attachments, { type: 'image', uri: result.assets[0].uri }]);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+    } else {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: '*/*',
+        copyToCacheDirectory: true,
+      });
+      if (!result.canceled && result.assets[0]) {
+        setAttachments([...attachments, {
+          type: 'file',
+          uri: result.assets[0].uri,
+          name: result.assets[0].name,
+        }]);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+    }
+  };
+
+  const selectedCount = selectedActions.size;
+  const chevronRotation = rotateAnim.interpolate({
     inputRange: [0, 1],
     outputRange: ['0deg', '180deg'],
   });
 
-  const maxHeight = heightAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 500],
-  });
-
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.card }]}>
-      {/* Header */}
+    <View style={styles.container}>
       <Pressable
-        style={styles.header}
-        onPress={toggleExpand}
+        style={({ pressed }) => [
+          styles.header,
+          pressed && { opacity: 0.7 },
+        ]}
+        onPress={toggleExpanded}
         accessible={true}
         accessibilityRole="button"
-        accessibilityLabel="Task Configuration"
-        accessibilityHint={isExpanded ? 'Collapse options' : 'Expand options'}
-        accessibilityState={{ expanded: isExpanded }}
+        accessibilityLabel={`Quick Actions. ${selectedCount} added`}
+        accessibilityState={{ expanded }}
       >
-        <Text style={[styles.headerText, { color: theme.colors.textSecondary }]}>
-          Task Configuration
-        </Text>
-
-        <Animated.View style={{ transform: [{ rotate }] }}>
-          <MaterialIcons name="expand-more" size={24} color={theme.colors.textSecondary} />
+        <View style={styles.headerLeft}>
+          <View style={styles.iconBox}>
+            <MaterialIcons name="bolt" size={16} color="#2F00FF" />
+          </View>
+          <Text style={styles.headerText}>Quick Actions</Text>
+          {selectedCount > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{selectedCount}</Text>
+            </View>
+          )}
+        </View>
+        <Animated.View style={{ transform: [{ rotate: chevronRotation }] }}>
+          <MaterialIcons name="keyboard-arrow-down" size={20} color="#9ca3af" />
         </Animated.View>
       </Pressable>
 
-      {/* Expandable Content */}
-      <Animated.View style={[styles.content, { maxHeight, opacity: heightAnim }]}>
-        {/* Quick Actions */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.textTertiary }]}>
-            QUICK ACTIONS
-          </Text>
+      {expanded && (
+        <View style={styles.content}>
+          {QUICK_ACTIONS.map(({ type, icon, label, color }) => {
+            const isSelected = selectedActions.has(type);
+            const value = actionValues.get(type);
 
-          <View style={styles.actionsGrid}>
-            {quickActionTypes.map(({ type, icon, label }) => {
-              const isSelected = selectedActions.has(type);
-
-              return (
-                <Pressable
-                  key={type}
-                  style={[
-                    styles.actionButton,
-                    {
-                      backgroundColor: isSelected ? '#2F00FF' : theme.colors.background,
-                      borderColor: isSelected ? '#2F00FF' : theme.colors.border,
-                    },
-                  ]}
-                  onPress={() => toggleAction(type)}
-                  accessible={true}
-                  accessibilityRole="button"
-                  accessibilityLabel={label}
-                  accessibilityHint={`Add ${label} action to reminder`}
-                  accessibilityState={{ selected: isSelected }}
-                >
-                  <MaterialIcons
-                    name={icon as any}
-                    size={20}
-                    color={isSelected ? '#ffffff' : theme.colors.text}
-                  />
-                  <Text
-                    style={[
-                      styles.actionLabel,
-                      { color: isSelected ? '#ffffff' : theme.colors.text },
-                    ]}
-                  >
-                    {label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
-
-        {/* Divider */}
-        <View style={[styles.divider, { backgroundColor: theme.colors.border }]} />
-
-        {/* Repeat Options */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.textTertiary }]}>
-            REPEAT
-          </Text>
-
-          <View style={styles.repeatRow}>
-            {['Daily', 'Weekly', 'Custom'].map((option) => (
+            return (
               <Pressable
-                key={option}
-                style={[
-                  styles.repeatButton,
-                  { backgroundColor: theme.colors.background, borderColor: theme.colors.border },
+                key={type}
+                style={({ pressed }) => [
+                  styles.row,
+                  isSelected && { backgroundColor: '#fafafa' },
+                  pressed && { opacity: 0.7 },
                 ]}
+                onPress={() => toggleAction(type)}
                 accessible={true}
                 accessibilityRole="button"
-                accessibilityLabel={`Repeat ${option}`}
+                accessibilityLabel={`${label}${isSelected ? '. Added' : ''}`}
               >
-                <Text style={[styles.repeatText, { color: theme.colors.text }]}>
-                  {option}
-                </Text>
+                <View style={[styles.rowIcon, { backgroundColor: `${color}15` }]}>
+                  <MaterialIcons name={icon} size={18} color={color} />
+                </View>
+                <View style={styles.rowInfo}>
+                  <Text style={styles.rowLabel}>{label}</Text>
+                  {isSelected && value && (
+                    <Text style={styles.rowPreview} numberOfLines={1}>
+                      {getActionPreview(type, value)}
+                    </Text>
+                  )}
+                </View>
+                {isSelected ? (
+                  <MaterialIcons name="check-circle" size={20} color={color} />
+                ) : (
+                  <MaterialIcons name="add-circle-outline" size={20} color="#d1d5db" />
+                )}
               </Pressable>
-            ))}
+            );
+          })}
+
+          <View style={styles.attachRow}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.attachBtn,
+                pressed && { opacity: 0.6 },
+              ]}
+              onPress={() => handleAddAttachment('image')}
+              accessible={true}
+              accessibilityRole="button"
+              accessibilityLabel="Attach photo"
+            >
+              <MaterialIcons name="photo-camera" size={16} color="#9ca3af" />
+              <Text style={styles.attachText}>Photo</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [
+                styles.attachBtn,
+                pressed && { opacity: 0.6 },
+              ]}
+              onPress={() => handleAddAttachment('file')}
+              accessible={true}
+              accessibilityRole="button"
+              accessibilityLabel="Attach file"
+            >
+              <MaterialIcons name="attach-file" size={16} color="#9ca3af" />
+              <Text style={styles.attachText}>File</Text>
+            </Pressable>
           </View>
         </View>
+      )}
 
-        {/* Divider */}
-        <View style={[styles.divider, { backgroundColor: theme.colors.border }]} />
+      {!expanded && selectedCount > 0 && (
+        <View style={styles.chips}>
+          {Array.from(selectedActions).map((type) => {
+            const config = QUICK_ACTIONS.find(a => a.type === type);
+            if (!config) return null;
 
-        {/* Attachments */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.textTertiary }]}>
-            ATTACHMENTS
-          </Text>
-
-          <Pressable
-            style={[styles.attachmentButton, { borderColor: theme.colors.border }]}
-            accessible={true}
-            accessibilityRole="button"
-            accessibilityLabel="Add attachment"
-            accessibilityHint="Add file, photo, or link"
-          >
-            <MaterialIcons name="add" size={20} color={theme.colors.textSecondary} />
-            <Text style={[styles.attachmentText, { color: theme.colors.textSecondary }]}>
-              Add file, photo, or link
-            </Text>
-          </Pressable>
+            return (
+              <View key={type} style={[styles.chip, { borderColor: `${config.color}30` }]}>
+                <MaterialIcons name={config.icon} size={12} color={config.color} />
+                <Text style={[styles.chipText, { color: config.color }]}>{config.label}</Text>
+                <Pressable
+                  onPress={() => toggleAction(type)}
+                  hitSlop={8}
+                  style={({ pressed }) => [pressed && { opacity: 0.4 }]}
+                >
+                  <MaterialIcons name="close" size={12} color="#c4c4c4" />
+                </Pressable>
+              </View>
+            );
+          })}
         </View>
-      </Animated.View>
+      )}
 
-      {/* Action Input Modal */}
+      {attachments.length > 0 && (
+        <View style={styles.attachments}>
+          {attachments.map((attachment, index) => (
+            <View key={index} style={styles.attachmentItem}>
+              <MaterialIcons
+                name={attachment.type === 'image' ? 'image' : 'insert-drive-file'}
+                size={14}
+                color="#6b7280"
+              />
+              <Text style={styles.attachmentText} numberOfLines={1}>
+                {attachment.name || 'Photo'}
+              </Text>
+              <Pressable
+                onPress={() => setAttachments(attachments.filter((_, i) => i !== index))}
+                hitSlop={8}
+                style={({ pressed }) => [pressed && { opacity: 0.5 }]}
+              >
+                <MaterialIcons name="close" size={14} color="#9ca3af" />
+              </Pressable>
+            </View>
+          ))}
+        </View>
+      )}
+
       <ActionInputModal
         visible={showActionModal}
         actionType={selectedActionType}
@@ -256,91 +313,150 @@ export default function TaskConfigSection({ onActionsChange, onRepeatChange }: T
 
 const styles = StyleSheet.create({
   container: {
+    backgroundColor: '#ffffff',
     borderRadius: 16,
-    marginVertical: 16,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    shadowColor: Platform.OS === 'ios' ? '#000' : undefined,
+    shadowOpacity: Platform.OS === 'ios' ? 0.04 : 0,
+    shadowRadius: Platform.OS === 'ios' ? 12 : 0,
+    shadowOffset: Platform.OS === 'ios' ? { width: 0, height: 2 } : { width: 0, height: 0 },
+    elevation: Platform.OS === 'android' ? 2 : 0,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  iconBox: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: 'rgba(47, 0, 255, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerText: {
     fontSize: 14,
     fontFamily: 'BricolageGrotesque-Medium',
+    color: '#1a1a1a',
   },
-  content: {
-    overflow: 'hidden',
-  },
-  section: {
-    padding: 16,
-  },
-  sectionTitle: {
-    fontSize: 10,
-    fontFamily: 'BricolageGrotesque-Bold',
-    letterSpacing: 1.5,
-    textTransform: 'uppercase',
-    marginBottom: 12,
-  },
-  actionsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    gap: 8,
-    minWidth: 100,
-  },
-  actionLabel: {
-    fontSize: 14,
-    fontFamily: 'BricolageGrotesque-Medium',
-  },
-  divider: {
-    height: 1,
-    marginHorizontal: 16,
-  },
-  repeatRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  repeatButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    alignItems: 'center',
-  },
-  repeatText: {
-    fontSize: 14,
-    fontFamily: 'BricolageGrotesque-Medium',
-  },
-  attachmentButton: {
-    flexDirection: 'row',
+  badge: {
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#2F00FF',
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: 6,
+  },
+  badgeText: {
+    fontSize: 11,
+    fontFamily: 'BricolageGrotesque-Bold',
+    color: '#ffffff',
+  },
+  content: {
+    paddingHorizontal: 12,
+    paddingBottom: 12,
+    gap: 2,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingVertical: 12,
-    borderRadius: 12,
-    borderWidth: 2,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    gap: 12,
+  },
+  rowIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rowInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  rowLabel: {
+    fontSize: 14,
+    fontFamily: 'BricolageGrotesque-Medium',
+    color: '#1a1a1a',
+  },
+  rowPreview: {
+    fontSize: 12,
+    fontFamily: 'BricolageGrotesque-Regular',
+    color: '#9ca3af',
+  },
+  attachRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 8,
+    paddingHorizontal: 0,
+  },
+  attachBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
     borderStyle: 'dashed',
+    gap: 6,
+  },
+  attachText: {
+    fontSize: 12,
+    fontFamily: 'BricolageGrotesque-Medium',
+    color: '#9ca3af',
+  },
+  chips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    paddingHorizontal: 18,
+    paddingBottom: 14,
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#fafafa',
+    borderWidth: 1,
+    gap: 5,
+  },
+  chipText: {
+    fontSize: 12,
+    fontFamily: 'BricolageGrotesque-Medium',
+  },
+  attachments: {
+    paddingHorizontal: 18,
+    paddingBottom: 14,
+    gap: 6,
+  },
+  attachmentItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#f8f7fc',
     gap: 8,
   },
   attachmentText: {
-    fontSize: 14,
+    flex: 1,
+    fontSize: 12,
     fontFamily: 'BricolageGrotesque-Regular',
+    color: '#6b7280',
   },
 });

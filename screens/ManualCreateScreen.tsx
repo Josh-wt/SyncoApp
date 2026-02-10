@@ -131,7 +131,7 @@ function AnimatedBackButton({ onPress }: { onPress: () => void }) {
   );
 }
 
-// Animated Save Button
+// Animated Save Button with spin loading animation
 function AnimatedSaveButton({
   onPress,
   disabled,
@@ -143,6 +143,45 @@ function AnimatedSaveButton({
 }) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const translateYAnim = useRef(new Animated.Value(0)).current;
+  const spinAnim = useRef(new Animated.Value(0)).current;
+  const spinnerScale = useRef(new Animated.Value(0)).current;
+  const spinAnimRef = useRef<Animated.CompositeAnimation | null>(null);
+
+  useEffect(() => {
+    if (isSaving) {
+      // Scale in the spinner
+      Animated.spring(spinnerScale, {
+        toValue: 1,
+        useNativeDriver: true,
+        tension: 300,
+        friction: 10,
+      }).start();
+      // Start continuous rotation
+      spinAnim.setValue(0);
+      const loop = Animated.loop(
+        Animated.timing(spinAnim, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: true,
+          easing: undefined, // linear
+        })
+      );
+      spinAnimRef.current = loop;
+      loop.start();
+    } else {
+      // Scale out the spinner
+      Animated.timing(spinnerScale, {
+        toValue: 0,
+        duration: 150,
+        useNativeDriver: true,
+      }).start();
+      // Stop rotation
+      if (spinAnimRef.current) {
+        spinAnimRef.current.stop();
+        spinAnimRef.current = null;
+      }
+    }
+  }, [isSaving, spinAnim, spinnerScale]);
 
   const handlePressIn = () => {
     if (disabled) return;
@@ -177,6 +216,11 @@ function AnimatedSaveButton({
       }),
     ]).start();
   };
+
+  const spinInterpolate = spinAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
 
   return (
     <Pressable
@@ -219,9 +263,35 @@ function AnimatedSaveButton({
             />
             <View style={styles.saveButtonContent}>
               <Text style={styles.saveButtonText}>
-                {isSaving ? 'Saving...' : 'Save Reminder'}
+                {isSaving ? 'Saving' : 'Save Reminder'}
               </Text>
-              {!isSaving && <CheckAllIcon />}
+              {isSaving ? (
+                <Animated.View
+                  style={{
+                    transform: [{ rotate: spinInterpolate }, { scale: spinnerScale }],
+                    opacity: spinnerScale,
+                    width: 28,
+                    height: 28,
+                    borderRadius: 14,
+                    backgroundColor: 'rgba(255,255,255,0.2)',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 20,
+                      height: 20,
+                      borderRadius: 10,
+                      borderWidth: 2.5,
+                      borderColor: 'rgba(255,255,255,0.3)',
+                      borderTopColor: '#ffffff',
+                    }}
+                  />
+                </Animated.View>
+              ) : (
+                <CheckAllIcon />
+              )}
             </View>
           </LinearGradient>
         </BlurView>
@@ -277,7 +347,7 @@ function AnimatedPickerOptionItem({
   );
 }
 
-// Animated Confirm Button
+// Animated Confirm Button (uses same BlurView + 3D highlights as Save button)
 function AnimatedConfirmButton({ onPress, label }: { onPress: () => void; label: string }) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const translateYAnim = useRef(new Animated.Value(0)).current;
@@ -323,14 +393,30 @@ function AnimatedConfirmButton({ onPress, label }: { onPress: () => void; label:
           { transform: [{ scale: scaleAnim }, { translateY: translateYAnim }] },
         ]}
       >
-        <LinearGradient
-          colors={['#2F00FF', '#9FA8F8']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.pickerConfirmGradient}
-        >
-          <Text style={styles.pickerConfirmText}>{label}</Text>
-        </LinearGradient>
+        <BlurView intensity={30} tint="light" style={styles.saveButtonBlur}>
+          <LinearGradient
+            colors={['#2F00FF', '#2F00FF', '#2F00FF']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={styles.pickerConfirmGradient}
+          >
+            <LinearGradient
+              colors={['rgba(255, 255, 255, 0.4)', 'rgba(255, 255, 255, 0)']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 0.5 }}
+              style={styles.highlightTop}
+            />
+            <LinearGradient
+              colors={['rgba(255, 255, 255, 0)', 'rgba(255, 255, 255, 0.4)']}
+              start={{ x: 0, y: 0.5 }}
+              end={{ x: 0, y: 1 }}
+              style={styles.highlightBottom}
+            />
+            <View style={{ zIndex: 1 }}>
+              <Text style={styles.pickerConfirmText}>{label}</Text>
+            </View>
+          </LinearGradient>
+        </BlurView>
       </Animated.View>
     </Pressable>
   );
@@ -633,6 +719,7 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
 
   // Voice mode state
   const [isVoiceMode, setIsVoiceMode] = useState(false);
+  const [showVoiceOverlay, setShowVoiceOverlay] = useState(false);
   const [voiceTranscript, setVoiceTranscript] = useState('');
   const [aiResponse, setAiResponse] = useState('');
   const [voiceError, setVoiceError] = useState<string | null>(null);
@@ -696,32 +783,35 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
     orbPositionAnim.setValue({ x: 0, y: 0 });
     orbScaleAnim.setValue(1);
 
+    // Show overlay immediately so it can animate in
+    setShowVoiceOverlay(true);
+    setIsVoiceMode(true);
+
     // Animate mic to center with smooth transition
     Animated.parallel([
       Animated.spring(micPositionAnim, {
         toValue: { x: -(SCREEN_WIDTH / 2 - 48 - 24), y: SCREEN_HEIGHT / 3 - 48 },
         useNativeDriver: true,
-        tension: 60,
-        friction: 10,
+        tension: 50,
+        friction: 12,
       }),
       Animated.spring(micScaleAnim, {
         toValue: 1.8,
         useNativeDriver: true,
-        tension: 60,
-        friction: 10,
+        tension: 50,
+        friction: 12,
       }),
       Animated.timing(micOpacityAnim, {
         toValue: 0,
-        duration: 300,
+        duration: 250,
         useNativeDriver: true,
       }),
       Animated.timing(voiceOverlayOpacity, {
         toValue: 1,
-        duration: 350,
+        duration: 400,
         useNativeDriver: true,
       }),
     ]).start(async () => {
-      setIsVoiceMode(true);
       // Start recording after animation completes
       await startRecording();
     });
@@ -819,31 +909,33 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
           setTimeout(() => {
             setIsVoiceMode(false);
             setIsProcessingVoice(false);
-            // Reset animations
+            // Animate out smoothly, then unmount
             Animated.parallel([
               Animated.spring(micPositionAnim, {
                 toValue: { x: 0, y: 0 },
                 useNativeDriver: true,
-                tension: 60,
-                friction: 10,
+                tension: 50,
+                friction: 12,
               }),
               Animated.spring(micScaleAnim, {
                 toValue: 1,
                 useNativeDriver: true,
-                tension: 60,
-                friction: 10,
+                tension: 50,
+                friction: 12,
               }),
               Animated.timing(micOpacityAnim, {
                 toValue: 1,
-                duration: 200,
+                duration: 300,
                 useNativeDriver: true,
               }),
               Animated.timing(voiceOverlayOpacity, {
                 toValue: 0,
-                duration: 200,
+                duration: 350,
                 useNativeDriver: true,
               }),
-            ]).start();
+            ]).start(() => {
+              setShowVoiceOverlay(false);
+            });
           }, 1500);
         } else {
           // Multiple reminders: auto-create all and close
@@ -921,6 +1013,7 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
               setTimeout(() => {
                 setIsCreatingReminder(false);
                 setIsVoiceMode(false);
+                setShowVoiceOverlay(false);
                 onBack();
               }, 800);
             } catch (error) {
@@ -1043,43 +1136,47 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
     setVoiceError(null);
     setIsCreatingReminder(false);
 
-    // Animate mic and orb back to original positions
+    // Animate FIRST, then unmount overlay after animation completes
     Animated.parallel([
       Animated.spring(micPositionAnim, {
         toValue: { x: 0, y: 0 },
         useNativeDriver: true,
-        tension: 60,
-        friction: 10,
+        tension: 50,
+        friction: 12,
       }),
       Animated.spring(micScaleAnim, {
         toValue: 1,
         useNativeDriver: true,
-        tension: 60,
-        friction: 10,
+        tension: 50,
+        friction: 12,
       }),
       Animated.timing(micOpacityAnim, {
         toValue: 1,
-        duration: 200,
+        duration: 300,
         useNativeDriver: true,
       }),
       Animated.spring(orbPositionAnim, {
         toValue: { x: 0, y: 0 },
         useNativeDriver: true,
-        tension: 50,
-        friction: 8,
+        tension: 40,
+        friction: 10,
       }),
       Animated.spring(orbScaleAnim, {
-        toValue: 1,
+        toValue: 0.3,
         useNativeDriver: true,
-        tension: 50,
-        friction: 8,
+        tension: 40,
+        friction: 10,
       }),
       Animated.timing(voiceOverlayOpacity, {
         toValue: 0,
-        duration: 200,
+        duration: 350,
         useNativeDriver: true,
       }),
-    ]).start();
+    ]).start(() => {
+      // Only unmount after exit animation completes
+      setShowVoiceOverlay(false);
+      orbScaleAnim.setValue(1);
+    });
   }, [cancelRecording, micPositionAnim, micScaleAnim, micOpacityAnim, voiceOverlayOpacity, orbPositionAnim, orbScaleAnim]);
 
   // Cleanup on unmount
@@ -1627,7 +1724,7 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
         />
 
         {/* Voice Recording Overlay */}
-        {isVoiceMode && (
+        {showVoiceOverlay && (
           <Animated.View
             style={[
               StyleSheet.absoluteFillObject,
@@ -2419,6 +2516,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 100,
+    position: 'relative',
   },
   pickerConfirmText: {
     fontSize: 16,
