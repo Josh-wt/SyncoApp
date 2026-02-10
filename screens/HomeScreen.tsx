@@ -190,24 +190,24 @@ export default function HomeScreen() {
         />
       </Animated.View>
 
-      {/* Manual Create Screen - pre-mounted and slides in from right */}
-      <Animated.View
-        style={[
-          styles.createScreenContainer,
-          {
-            transform: [{ translateX: createScreenTranslateX }],
-            opacity: currentScreen === 'manual-create' ? 1 : 0,
-          },
-        ]}
-        pointerEvents={currentScreen === 'manual-create' ? 'auto' : 'none'}
-      >
-        <Suspense fallback={<View style={{ flex: 1, backgroundColor: '#f6f1ff' }} />}>
-          <ManualCreateScreen
-            onBack={handleBackToHome}
-            onSave={handleSaveReminder}
-          />
-        </Suspense>
-      </Animated.View>
+      {/* Manual Create Screen - only render when active */}
+      {currentScreen === 'manual-create' && (
+        <Animated.View
+          style={[
+            styles.createScreenContainer,
+            {
+              transform: [{ translateX: createScreenTranslateX }],
+            },
+          ]}
+        >
+          <Suspense fallback={<View style={{ flex: 1, backgroundColor: '#f6f1ff' }} />}>
+            <ManualCreateScreen
+              onBack={handleBackToHome}
+              onSave={handleSaveReminder}
+            />
+          </Suspense>
+        </Animated.View>
+      )}
     </View>
   );
 }
