@@ -25,7 +25,7 @@ const SLIDES = [
   {
     title: 'Never forget\nwhat matters',
     image: require('../assets/zero.png'),
-    topImage: null,
+    topImage: require('../assets/onetop.png'),
     isIntro: true,
   },
   {
@@ -36,12 +36,12 @@ const SLIDES = [
   {
     title: 'Smart snooze\nthat works for you',
     image: require('../assets/two.png'),
-    topImage: null,
+    topImage: require('../assets/onetop.png'),
   },
   {
     title: 'Your reminders,\neverywhere',
     image: require('../assets/twoo.png'),
-    topImage: null,
+    topImage: require('../assets/onetop.png'),
   },
 ];
 
@@ -119,30 +119,30 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
       signInButtonsAnim.setValue(0);
       signInTermsAnim.setValue(0);
 
-      Animated.stagger(120, [
+      Animated.stagger(70, [
         Animated.spring(signInLogoAnim, {
           toValue: 1,
           useNativeDriver: true,
-          tension: 60,
-          friction: 8,
+          tension: 90,
+          friction: 10,
         }),
         Animated.spring(signInTitleAnim, {
           toValue: 1,
           useNativeDriver: true,
-          tension: 60,
-          friction: 8,
+          tension: 90,
+          friction: 10,
         }),
         Animated.spring(signInButtonsAnim, {
           toValue: 1,
           useNativeDriver: true,
-          tension: 60,
-          friction: 8,
+          tension: 90,
+          friction: 10,
         }),
         Animated.spring(signInTermsAnim, {
           toValue: 1,
           useNativeDriver: true,
-          tension: 60,
-          friction: 8,
+          tension: 90,
+          friction: 10,
         }),
       ]).start();
     }
@@ -156,12 +156,12 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
       Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 0,
-          duration: 250,
+          duration: 180,
           useNativeDriver: true,
         }),
         Animated.timing(slideAnim, {
           toValue: -40,
-          duration: 250,
+          duration: 180,
           useNativeDriver: true,
         }),
       ]).start(() => {
@@ -172,14 +172,14 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
           Animated.spring(fadeAnim, {
             toValue: 1,
             useNativeDriver: true,
-            tension: 80,
-            friction: 12,
+            tension: 120,
+            friction: 14,
           }),
           Animated.spring(slideAnim, {
             toValue: 0,
             useNativeDriver: true,
-            tension: 80,
-            friction: 12,
+            tension: 120,
+            friction: 14,
           }),
         ]).start();
       });
@@ -443,6 +443,11 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
   const slide = SLIDES[currentSlide];
   const isSnoozeSlide = currentSlide === 2;
   const isSyncSlide = currentSlide === 3;
+  const hasTopImage = Boolean(slide.topImage);
+  const imageScale = fadeAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.96, 1],
+  });
 
   return (
     <View style={styles.container}>
@@ -453,13 +458,15 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
       />
 
       {slide.topImage && (
-        <View
+        <Animated.View
           style={[
             styles.oneImageWrap,
             {
-              top: height * 0.07,
+              top: height * 0.06,
               alignItems: 'flex-start',
               paddingLeft: (width - width * 0.987376) / 2 - width * 0.055,
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
             },
           ]}
         >
@@ -468,7 +475,7 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
             style={[styles.oneImage, { width: width * 0.987376, height: width * 0.987376 }]}
             resizeMode="contain"
           />
-        </View>
+        </Animated.View>
       )}
 
       <Animated.View
@@ -476,14 +483,22 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
           styles.oneImageWrap,
           {
             top: slide.isIntro
-              ? height * 0.25
+              ? hasTopImage
+                ? height * 0.32
+                : height * 0.25
               : isSnoozeSlide
-              ? height * 0.2
+              ? hasTopImage
+                ? height * 0.28
+                : height * 0.2
               : isSyncSlide
-              ? height * 0.18
+              ? hasTopImage
+                ? height * 0.26
+                : height * 0.18
+              : hasTopImage
+              ? height * 0.44
               : height * 0.38,
             opacity: fadeAnim,
-            transform: [{ translateY: slideAnim }],
+            transform: [{ translateY: slideAnim }, { scale: imageScale }],
           },
         ]}
       >
@@ -516,7 +531,7 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
         <Pressable
           onPress={onSkip}
           style={styles.skipButton}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
         >
           <Text style={styles.skipText}>Skip</Text>
         </Pressable>
@@ -531,14 +546,14 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
                 right: 24,
                 top: height * 0.25 + width * 0.8 + 24,
                 opacity: fadeAnim,
-                transform: [{ translateY: slideAnim }],
+                transform: [{ translateY: slideAnim }, { scale: imageScale }],
               }
             : {
                 left: 24,
                 right: 24,
                 bottom: 120,
                 opacity: fadeAnim,
-                transform: [{ translateY: slideAnim }],
+                transform: [{ translateY: slideAnim }, { scale: imageScale }],
               },
         ]}
       >
@@ -561,7 +576,7 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
             onPressIn={handleButtonPressIn}
             onPressOut={handleButtonPressOut}
             style={styles.primaryButton}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
           >
             <BlurView intensity={30} tint="light" style={styles.blurLayer}>
               <LinearGradient

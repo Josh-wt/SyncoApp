@@ -6,6 +6,11 @@ import { supabase } from './supabase';
 import { getAllFutureReminders } from './reminders';
 import type { ReminderActionType, SnoozeMode } from './types';
 import { getUserPreferences } from './userPreferences';
+import {
+  createDynamicNotificationCategory,
+  handleDynamicNotificationAction,
+  prepareNotificationActionData,
+} from './notificationCategories';
 
 export const REMINDER_CATEGORY_ID = 'reminder_actions';
 const ACTION_SNOOZE_TEXT = 'SNOOZE_TEXT';
@@ -329,8 +334,21 @@ export async function scheduleReminder(reminder: ReminderScheduleInput): Promise
 
   // Use dynamic category if reminder has actionable quick actions
   let categoryId = REMINDER_CATEGORY_ID;
+  let actionData: Record<string, any> = {};
+
   if (actionTypes && actionTypes.length > 0) {
-    categoryId = await setupDynamicNotificationCategory(reminderId, actionTypes);
+    // Import actions to create proper action buttons
+    const { getReminderActions } = await import('./reminderActions');
+    const actions = await getReminderActions(reminderId);
+
+    if (actions.length > 0) {
+      // Get default snooze duration from user preferences
+      const prefs = await getUserPreferences();
+      const defaultSnooze = prefs?.snooze_preset_values?.[0] || 15;
+
+      categoryId = await createDynamicNotificationCategory(reminderId, actions, defaultSnooze);
+      actionData = prepareNotificationActionData(actions);
+    }
   }
 
   const content: Notifications.NotificationContentInput = {
@@ -346,6 +364,8 @@ export async function scheduleReminder(reminder: ReminderScheduleInput): Promise
       reminderUpdatedAt,
       actionTypes,
       actionValues,
+      actionData, // Include action data for faster access
+      defaultSnoozeMinutes: 15, // Default snooze duration
     },
   };
 
@@ -672,11 +692,32 @@ export async function handleNotificationResponse(
   });
 
   const data = response.notification.request.content.data as ReminderData | undefined;
+
+  // Skip test notifications
+  if (data && 'testNotification' in data && data.testNotification) {
+    console.log('✅ Test notification action button worked!');
+    return;
+  }
+
   const reminderId = data?.reminderId;
 
   if (!reminderId || !isUuid(reminderId)) {
     console.log('Invalid reminderId in notification data:', reminderId);
     return;
+  }
+
+  // First try to handle with dynamic action system
+  const handled = await handleDynamicNotificationAction(
+    response,
+    onMarkDone,
+    (rid, minutes) => {
+      // Handle snooze
+      rescheduleSnooze(rid, minutes, data ?? {}).catch(console.error);
+    }
+  );
+
+  if (handled) {
+    return; // Action was handled by dynamic system
   }
 
   if (response.actionIdentifier === ACTION_MARK_DONE) {

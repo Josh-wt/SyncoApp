@@ -113,13 +113,18 @@ export default function ActionPickerModal({
 
         <Animated.View
           style={[
-            styles.modalContainer,
+            styles.sheetWrapper,
             {
               transform: [{ translateY: slideAnim }],
             },
           ]}
         >
-          <View style={[styles.modal, { paddingBottom: insets.bottom + 8 }]}>
+          <View
+            style={[
+              styles.sheet,
+              { paddingBottom: insets.bottom + 12 },
+            ]}
+          >
             <View style={styles.handle} />
 
             <Text style={styles.title} numberOfLines={2}>
@@ -127,35 +132,44 @@ export default function ActionPickerModal({
             </Text>
 
             <View style={styles.actions}>
-              {options.map((option) => (
+              {options.map((option, index) => {
+                const isLast = index === options.length - 1;
+                return (
                 <Pressable
                   key={option.id}
                   style={({ pressed }) => [
-                    styles.actionRow,
-                    pressed && { opacity: 0.7 },
+                    styles.actionRowHit,
+                    pressed && styles.actionRowPressed,
                   ]}
                   onPress={() => handleOptionPress(option)}
-                  accessible={true}
+                  hitSlop={{ top: 6, bottom: 6, left: 10, right: 10 }}
                   accessibilityRole="button"
                   accessibilityLabel={option.label}
                 >
-                  <View style={[styles.iconCircle, { backgroundColor: option.color || '#2F00FF' }]}>
-                    <MaterialIcons name={option.icon} size={24} color="#ffffff" />
+                  <View style={[styles.actionRow, !isLast && styles.actionRowDivider]}>
+                    <View style={styles.iconCircle}>
+                      <MaterialIcons name={option.icon} size={20} color={option.color || '#2F00FF'} />
+                    </View>
+                    <Text style={styles.actionText} numberOfLines={1}>
+                      {option.label}
+                    </Text>
+                    <MaterialIcons name="chevron-right" size={20} color="#c7cdd8" />
                   </View>
-                  <Text style={styles.actionText}>{option.label}</Text>
                 </Pressable>
-              ))}
+              )})}
             </View>
 
-            <Pressable
-              style={({ pressed }) => [
-                styles.cancelButton,
-                pressed && { backgroundColor: '#f5f5f5' },
-              ]}
-              onPress={handleClose}
-            >
-              <Text style={styles.cancelText}>Cancel</Text>
-            </Pressable>
+            <View style={styles.cancelSection}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.cancelButton,
+                  pressed && styles.cancelButtonPressed,
+                ]}
+                onPress={handleClose}
+              >
+                <Text style={styles.cancelText}>Cancel</Text>
+              </Pressable>
+            </View>
           </View>
         </Animated.View>
       </View>
@@ -165,78 +179,113 @@ export default function ActionPickerModal({
 
 const styles = StyleSheet.create({
   root: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     justifyContent: 'flex-end',
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: '#000000',
   },
-  modalContainer: {
-    paddingHorizontal: 20,
+  sheetWrapper: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 16,
+    paddingBottom: 18,
   },
-  modal: {
+  sheet: {
+    width: '100%',
     backgroundColor: '#ffffff',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingTop: 12,
-    paddingBottom: 8,
+    borderRadius: 28,
+    paddingTop: 10,
+    paddingBottom: 6,
     shadowColor: Platform.OS === 'ios' ? '#000' : undefined,
-    shadowOpacity: Platform.OS === 'ios' ? 0.2 : 0,
+    shadowOpacity: Platform.OS === 'ios' ? 0.1 : 0,
     shadowRadius: Platform.OS === 'ios' ? 24 : 0,
-    shadowOffset: Platform.OS === 'ios' ? { width: 0, height: -4 } : { width: 0, height: 0 },
-    elevation: Platform.OS === 'android' ? 12 : 0,
+    shadowOffset: Platform.OS === 'ios' ? { width: 0, height: -8 } : { width: 0, height: 0 },
+    elevation: Platform.OS === 'android' ? 10 : 0,
   },
   handle: {
-    width: 40,
+    width: 36,
     height: 4,
-    borderRadius: 2,
-    backgroundColor: '#d1d5db',
+    borderRadius: 999,
+    backgroundColor: '#e5e7eb',
     alignSelf: 'center',
-    marginBottom: 20,
+    marginBottom: 12,
   },
   title: {
-    fontSize: 20,
+    fontSize: 18,
     fontFamily: 'BricolageGrotesque-Bold',
-    letterSpacing: -0.3,
+    letterSpacing: -0.2,
     color: '#121118',
     textAlign: 'center',
-    marginBottom: 24,
     paddingHorizontal: 24,
+    marginBottom: 6,
   },
   actions: {
-    gap: 2,
     paddingHorizontal: 8,
+    paddingBottom: 2,
+  },
+  actionRowHit: {
+    width: '100%',
   },
   actionRow: {
+    width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 16,
+    paddingVertical: 14,
     paddingHorizontal: 16,
-    gap: 16,
+    borderRadius: 12,
+    backgroundColor: 'transparent',
+  },
+  actionRowDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#eef1f6',
+  },
+  actionRowPressed: {
+    transform: [{ scale: 0.98 }],
+    backgroundColor: '#f5f6fb',
+    borderRadius: 12,
   },
   iconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: 12,
   },
   actionText: {
-    fontSize: 17,
-    fontFamily: 'BricolageGrotesque-Medium',
-    letterSpacing: -0.2,
-    color: '#1a1a1a',
-    flex: 1,
-  },
-  cancelButton: {
-    marginTop: 8,
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  cancelText: {
     fontSize: 16,
     fontFamily: 'BricolageGrotesque-Medium',
-    color: '#9ca3af',
+    letterSpacing: -0.1,
+    color: '#111827',
+    flex: 1,
+    minWidth: 0,
+  },
+  cancelSection: {
+    paddingHorizontal: 8,
+    paddingBottom: 10,
+    paddingTop: 4,
+    alignItems: 'center',
+  },
+  cancelButton: {
+    marginTop: 6,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    minWidth: 140,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#eef1f6',
+  },
+  cancelButtonPressed: {
+    backgroundColor: '#f5f6fb',
+  },
+  cancelText: {
+    fontSize: 15,
+    fontFamily: 'BricolageGrotesque-SemiBold',
+    color: '#6b7280',
   },
 });

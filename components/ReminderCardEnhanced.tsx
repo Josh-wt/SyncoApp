@@ -297,6 +297,7 @@ export default function ReminderCardEnhanced({
                   accessibilityRole="button"
                   accessibilityLabel="Mark as complete"
                   accessibilityHint={`Mark ${reminder.title} as completed`}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
                   <MaterialIcons name="check" size={16} color="#FFFFFF" />
                   <Text style={styles.actionButtonText}>Complete</Text>
@@ -321,6 +322,7 @@ export default function ReminderCardEnhanced({
                   accessibilityRole="button"
                   accessibilityLabel="Snooze reminder"
                   accessibilityHint={`Snooze ${reminder.title} for later`}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
                   <MaterialIcons name="snooze" size={16} color="#FFFFFF" />
                   <Text style={styles.actionButtonText}>Snooze</Text>
@@ -345,6 +347,7 @@ export default function ReminderCardEnhanced({
                   accessibilityRole="button"
                   accessibilityLabel="Delete reminder"
                   accessibilityHint={`Delete ${reminder.title} permanently`}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
                   <MaterialIcons name="delete" size={16} color="#FFFFFF" />
                   <Text style={styles.actionButtonText}>Delete</Text>

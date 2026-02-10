@@ -30,21 +30,22 @@ function AnimatedSection({
   const opacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    const effectiveDelay = Math.round(delay * 0.4);
     const timer = setTimeout(() => {
       Animated.parallel([
         Animated.spring(translateY, {
           toValue: 0,
           useNativeDriver: true,
-          tension: 65,
-          friction: 10,
+          tension: 90,
+          friction: 12,
         }),
         Animated.timing(opacity, {
           toValue: 1,
-          duration: 350,
+          duration: 220,
           useNativeDriver: true,
         }),
       ]).start();
-    }, delay);
+    }, effectiveDelay);
     return () => clearTimeout(timer);
   }, []);
 
@@ -95,6 +96,7 @@ function AnimatedPressable({
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
       disabled={disabled}
+      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
     >
       <Animated.View
         className={cn}

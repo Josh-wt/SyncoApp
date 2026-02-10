@@ -85,7 +85,12 @@ function AnimatedCard({
   }
 
   return (
-    <Pressable onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
+    <Pressable
+      onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+    >
       <Animated.View
         style={[
           style,
@@ -123,7 +128,12 @@ function AnimatedBackButton({ onPress }: { onPress: () => void }) {
   };
 
   return (
-    <Pressable onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
+    <Pressable
+      onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+    >
       <Animated.View style={[styles.backButton, { transform: [{ scale: scaleAnim }] }]}>
         <BackIcon />
       </Animated.View>
@@ -331,7 +341,12 @@ function AnimatedPickerOptionItem({
   };
 
   return (
-    <Pressable onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
+    <Pressable
+      onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+    >
       <Animated.View
         style={[
           styles.pickerOption,
@@ -386,7 +401,12 @@ function AnimatedConfirmButton({ onPress, label }: { onPress: () => void; label:
   };
 
   return (
-    <Pressable onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
+    <Pressable
+      onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+    >
       <Animated.View
         style={[
           styles.pickerConfirm,
@@ -440,6 +460,7 @@ function DateTimePicker({
   const dateListRef = useRef<FlatList>(null);
   const hourScrollRef = useRef<ScrollView>(null);
   const minuteScrollRef = useRef<ScrollView>(null);
+  const isScrollingRef = useRef(false);
 
   const [selectedHour, setSelectedHour] = useState(selectedTime.getHours());
   const [selectedMinute, setSelectedMinute] = useState(selectedTime.getMinutes());
@@ -462,6 +483,11 @@ function DateTimePicker({
 
   // Update internal state when selectedTime prop changes (from AI)
   useEffect(() => {
+    // Skip if we're currently scrolling to prevent feedback loop
+    if (isScrollingRef.current) {
+      return;
+    }
+
     const newHour = selectedTime.getHours();
     const newMinute = selectedTime.getMinutes();
 
@@ -480,7 +506,7 @@ function DateTimePicker({
         animated: true,
       });
     }
-  }, [selectedTime]);
+  }, [selectedTime, selectedHour, selectedMinute]);
 
   // Initial scroll to selected values
   useEffect(() => {
@@ -512,21 +538,31 @@ function DateTimePicker({
   }, [selectedHour, selectedMinute]);
 
   const handleHourScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    isScrollingRef.current = true;
     const y = event.nativeEvent.contentOffset.y;
     const index = Math.round(y / TIME_ITEM_HEIGHT);
     const clampedIndex = Math.max(0, Math.min(index, hours.length - 1));
     if (clampedIndex !== selectedHour) {
       setSelectedHour(clampedIndex);
     }
+    // Clear the flag after a short delay to allow the change to propagate
+    setTimeout(() => {
+      isScrollingRef.current = false;
+    }, 100);
   };
 
   const handleMinuteScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    isScrollingRef.current = true;
     const y = event.nativeEvent.contentOffset.y;
     const index = Math.round(y / TIME_ITEM_HEIGHT);
     const clampedIndex = Math.max(0, Math.min(index, minutes.length - 1));
     if (clampedIndex !== selectedMinute) {
       setSelectedMinute(clampedIndex);
     }
+    // Clear the flag after a short delay to allow the change to propagate
+    setTimeout(() => {
+      isScrollingRef.current = false;
+    }, 100);
   };
 
   const formatDayLabel = (date: Date) => {
@@ -585,6 +621,7 @@ function DateTimePicker({
               <Pressable
                 key={item}
                 onPress={() => {
+                  isScrollingRef.current = true;
                   scrollRef.current?.scrollTo({
                     y: item * TIME_ITEM_HEIGHT,
                     animated: true,
@@ -594,6 +631,9 @@ function DateTimePicker({
                   } else {
                     setSelectedHour(item);
                   }
+                  setTimeout(() => {
+                    isScrollingRef.current = false;
+                  }, 100);
                 }}
                 style={styles.compactTimeItem}
               >
@@ -1250,6 +1290,10 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
       if (reminderActions.length > 0 && newReminder?.id) {
         try {
           await createReminderActions(newReminder.id, reminderActions);
+
+          // Re-sync notifications to update category with action buttons
+          const { syncLocalReminderSchedules } = await import('../lib/notifications');
+          await syncLocalReminderSchedules();
         } catch (error) {
           console.error('Failed to create reminder actions:', error);
           // Don't fail the whole operation if actions fail

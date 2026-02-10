@@ -1,15 +1,11 @@
 import { useRef, useState } from 'react';
-import { Animated, LayoutAnimation, Platform, Pressable, StyleSheet, Text, UIManager, View } from 'react-native';
+import { Animated, LayoutAnimation, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import ActionInputModal from './ActionInputModal';
 import { ReminderActionType } from '../lib/types';
-
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
 
 export interface QuickAction {
   type: ReminderActionType;
@@ -195,16 +191,19 @@ export default function TaskConfigSection({ onActionsChange }: TaskConfigSection
                 key={type}
                 style={({ pressed }) => [
                   styles.row,
-                  isSelected && { backgroundColor: '#fafafa' },
-                  pressed && { opacity: 0.7 },
+                  isSelected && {
+                    backgroundColor: `${color}08`,
+                    borderColor: `${color}20`,
+                  },
+                  pressed && { transform: [{ scale: 0.98 }], opacity: 0.8 },
                 ]}
                 onPress={() => toggleAction(type)}
                 accessible={true}
                 accessibilityRole="button"
                 accessibilityLabel={`${label}${isSelected ? '. Added' : ''}`}
               >
-                <View style={[styles.rowIcon, { backgroundColor: `${color}15` }]}>
-                  <MaterialIcons name={icon} size={18} color={color} />
+                <View style={[styles.rowIcon, { backgroundColor: `${color}12` }]}>
+                  <MaterialIcons name={icon} size={20} color={color} />
                 </View>
                 <View style={styles.rowInfo}>
                   <Text style={styles.rowLabel}>{label}</Text>
@@ -227,27 +226,27 @@ export default function TaskConfigSection({ onActionsChange }: TaskConfigSection
             <Pressable
               style={({ pressed }) => [
                 styles.attachBtn,
-                pressed && { opacity: 0.6 },
+                pressed && { backgroundColor: '#f0f0f0', transform: [{ scale: 0.97 }] },
               ]}
               onPress={() => handleAddAttachment('image')}
               accessible={true}
               accessibilityRole="button"
               accessibilityLabel="Attach photo"
             >
-              <MaterialIcons name="photo-camera" size={16} color="#9ca3af" />
+              <MaterialIcons name="photo-camera" size={18} color="#6b7280" />
               <Text style={styles.attachText}>Photo</Text>
             </Pressable>
             <Pressable
               style={({ pressed }) => [
                 styles.attachBtn,
-                pressed && { opacity: 0.6 },
+                pressed && { backgroundColor: '#f0f0f0', transform: [{ scale: 0.97 }] },
               ]}
               onPress={() => handleAddAttachment('file')}
               accessible={true}
               accessibilityRole="button"
               accessibilityLabel="Attach file"
             >
-              <MaterialIcons name="attach-file" size={16} color="#9ca3af" />
+              <MaterialIcons name="attach-file" size={18} color="#6b7280" />
               <Text style={styles.attachText}>File</Text>
             </Pressable>
           </View>
@@ -362,33 +361,43 @@ const styles = StyleSheet.create({
     color: '#ffffff',
   },
   content: {
-    paddingHorizontal: 12,
-    paddingBottom: 12,
-    gap: 2,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    paddingTop: 8,
+    gap: 8,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    gap: 14,
+    backgroundColor: '#fafafa',
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
   },
   rowIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   rowInfo: {
     flex: 1,
     gap: 2,
   },
   rowLabel: {
-    fontSize: 14,
+    fontSize: 15,
     fontFamily: 'BricolageGrotesque-Medium',
     color: '#1a1a1a',
+    letterSpacing: -0.2,
   },
   rowPreview: {
     fontSize: 12,
@@ -397,26 +406,28 @@ const styles = StyleSheet.create({
   },
   attachRow: {
     flexDirection: 'row',
-    gap: 8,
-    marginTop: 8,
+    gap: 10,
+    marginTop: 4,
     paddingHorizontal: 0,
   },
   attachBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     flex: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    borderStyle: 'dashed',
-    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#e0e0e0',
+    backgroundColor: '#fafafa',
+    gap: 8,
   },
   attachText: {
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: 'BricolageGrotesque-Medium',
-    color: '#9ca3af',
+    color: '#6b7280',
+    letterSpacing: -0.1,
   },
   chips: {
     flexDirection: 'row',

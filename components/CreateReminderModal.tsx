@@ -53,7 +53,12 @@ function AnimatedOptionCard({
   };
 
   return (
-    <Pressable onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
+    <Pressable
+      onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+    >
       <Animated.View
         style={[
           styles.optionCard,
@@ -89,12 +94,12 @@ export default function CreateReminderModal({ visible, onSelectMode, onClose }: 
         Animated.spring(slideAnim, {
           toValue: 0,
           useNativeDriver: true,
-          tension: 65,
-          friction: 11,
+          tension: 90,
+          friction: 12,
         }),
         Animated.timing(fadeAnim, {
           toValue: 1,
-          duration: 200,
+          duration: 140,
           useNativeDriver: true,
         }),
       ]).start();
@@ -102,12 +107,12 @@ export default function CreateReminderModal({ visible, onSelectMode, onClose }: 
       Animated.parallel([
         Animated.timing(slideAnim, {
           toValue: 300,
-          duration: 200,
+          duration: 140,
           useNativeDriver: true,
         }),
         Animated.timing(fadeAnim, {
           toValue: 0,
-          duration: 150,
+          duration: 120,
           useNativeDriver: true,
         }),
       ]).start();

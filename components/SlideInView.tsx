@@ -15,16 +15,16 @@ interface SlideInViewProps {
 export default function SlideInView({
   children,
   delay = 0,
-  duration = 400,
+  duration = 240,
   from = 'bottom',
   style,
 }: SlideInViewProps) {
-  const translateAnim = useRef(new Animated.Value(from === 'left' || from === 'right' ? 100 : 100)).current;
+  const translateAnim = useRef(new Animated.Value(from === 'left' || from === 'right' ? 80 : 80)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     // Set initial position based on direction
-    const initialValue = from === 'left' ? -100 : from === 'right' ? 100 : from === 'top' ? -100 : 100;
+    const initialValue = from === 'left' ? -80 : from === 'right' ? 80 : from === 'top' ? -80 : 80;
     translateAnim.setValue(initialValue);
 
     Animated.parallel([
@@ -32,8 +32,8 @@ export default function SlideInView({
         toValue: 0,
         delay,
         useNativeDriver: true,
-        tension: 80,
-        friction: 10,
+        tension: 120,
+        friction: 12,
       }),
       Animated.timing(opacityAnim, {
         toValue: 1,
