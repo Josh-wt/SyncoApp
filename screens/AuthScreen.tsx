@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import {
   Platform,
   Pressable,
@@ -9,7 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as AppleAuthentication from 'expo-apple-authentication';
+import appleAuth from '@invertase/react-native-apple-authentication';
 import { signInWithGoogle, signInWithApple } from '../lib/auth';
 import { GlowTopRight, GlowBottomLeft } from '../components/icons';
 
@@ -21,13 +21,9 @@ export default function AuthScreen({ onBack }: AuthScreenProps) {
   const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isAppleAuthAvailable, setIsAppleAuthAvailable] = useState(false);
-
-  useEffect(() => {
-    if (Platform.OS === 'ios') {
-      AppleAuthentication.isAvailableAsync().then(setIsAppleAuthAvailable);
-    }
-  }, []);
+  const [isAppleAuthAvailable] = useState(
+    () => Platform.OS === 'ios' && appleAuth.isSupported
+  );
 
   const handleGoogleSignIn = async () => {
     console.log('🔵 [AuthScreen] Google sign-in button pressed');

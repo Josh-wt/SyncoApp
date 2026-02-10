@@ -20,6 +20,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
+import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BackIcon, CalendarSmallIcon, ScheduleIcon, CheckAllIcon, GlowTopRight, GlowBottomLeft, BellNavIcon, RepeatIcon, ChevronRightIcon, CloseIcon, BlockIcon, DailyIcon, BookmarkIcon, SlidersIcon, CheckCircleIcon, MicSparkleIcon } from '../components/icons';
 import RecurringRuleModal from '../components/RecurringRuleModal';
@@ -755,7 +756,11 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
 
   // Notification picker modal state
   const [showNotifyPicker, setShowNotifyPicker] = useState(false);
+  const [notifyPickerMounted, setNotifyPickerMounted] = useState(false);
   const [tempNotifyMinutes, setTempNotifyMinutes] = useState(0);
+
+  // Recurring picker modal mounted state
+  const [recurringPickerMounted, setRecurringPickerMounted] = useState(false);
 
   // Voice mode state
   const [isVoiceMode, setIsVoiceMode] = useState(false);
@@ -1098,68 +1103,82 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
   // Animate notify picker modal
   useEffect(() => {
     if (showNotifyPicker) {
+      setNotifyPickerMounted(true);
+      // Opening animation - very slow and smooth
       Animated.parallel([
         Animated.spring(notifyPickerSlide, {
           toValue: 0,
           useNativeDriver: true,
-          tension: 50,
-          friction: 9,
+          tension: 30,
+          friction: 25,
         }),
         Animated.timing(notifyPickerBackdrop, {
           toValue: 1,
-          duration: 300,
+          duration: 500,
           useNativeDriver: true,
         }),
       ]).start();
-    } else {
+    } else if (notifyPickerMounted) {
+      // Closing animation - very slow and smooth
       Animated.parallel([
         Animated.spring(notifyPickerSlide, {
           toValue: SCREEN_HEIGHT,
           useNativeDriver: true,
-          tension: 50,
-          friction: 9,
+          tension: 25,
+          friction: 30,
         }),
         Animated.timing(notifyPickerBackdrop, {
           toValue: 0,
-          duration: 200,
+          duration: 600,
           useNativeDriver: true,
         }),
-      ]).start();
+      ]).start(({ finished }) => {
+        if (finished) {
+          setNotifyPickerMounted(false);
+        }
+      });
     }
-  }, [showNotifyPicker, notifyPickerSlide, notifyPickerBackdrop]);
+  }, [showNotifyPicker, notifyPickerMounted, notifyPickerSlide, notifyPickerBackdrop]);
 
   // Animate recurring picker modal
   useEffect(() => {
     if (showRecurringPicker) {
+      setRecurringPickerMounted(true);
+      // Opening animation - very slow and smooth
       Animated.parallel([
         Animated.spring(recurringPickerSlide, {
           toValue: 0,
           useNativeDriver: true,
-          tension: 50,
-          friction: 9,
+          tension: 30,
+          friction: 25,
         }),
         Animated.timing(recurringPickerBackdrop, {
           toValue: 1,
-          duration: 300,
+          duration: 500,
           useNativeDriver: true,
         }),
       ]).start();
-    } else {
+    } else if (recurringPickerMounted) {
+      // Closing animation - very slow and smooth
       Animated.parallel([
         Animated.spring(recurringPickerSlide, {
           toValue: SCREEN_HEIGHT,
           useNativeDriver: true,
-          tension: 50,
-          friction: 9,
+          tension: 25,
+          friction: 30,
         }),
         Animated.timing(recurringPickerBackdrop, {
           toValue: 0,
-          duration: 200,
+          duration: 600,
           useNativeDriver: true,
         }),
-      ]).start();
+      ]).start(({ finished }) => {
+        if (finished) {
+          setRecurringPickerMounted(false);
+        }
+      });
     }
-  }, [showRecurringPicker, recurringPickerSlide, recurringPickerBackdrop]);
+  }, [showRecurringPicker, recurringPickerMounted, recurringPickerSlide, recurringPickerBackdrop]);
 
   // Handle close voice mode
   const handleCloseVoiceMode = useCallback(async () => {
@@ -1234,16 +1253,20 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
       return;
     }
 
-    // Check reminder limits
+    // Immediate feedback - set loading state and haptic FIRST
+    setIsSaving(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    // Check reminder limits (after showing loading state)
     const { allowed, reason } = await canCreateReminder();
     if (!allowed) {
+      setIsSaving(false); // Reset loading state
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert('Limit Reached', reason || 'Unable to create reminder', [
         { text: 'OK', style: 'cancel' },
       ]);
       return;
     }
-
-    setIsSaving(true);
     try {
       // Combine date and time
       const scheduledTime = new Date(selectedDate);
@@ -1290,10 +1313,6 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
       if (reminderActions.length > 0 && newReminder?.id) {
         try {
           await createReminderActions(newReminder.id, reminderActions);
-
-          // Re-sync notifications to update category with action buttons
-          const { syncLocalReminderSchedules } = await import('../lib/notifications');
-          await syncLocalReminderSchedules();
         } catch (error) {
           console.error('Failed to create reminder actions:', error);
           // Don't fail the whole operation if actions fail
@@ -1523,7 +1542,7 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
         </View>
 
         {/* Notification Timing Picker Modal */}
-        {showNotifyPicker && (
+        {notifyPickerMounted && (
           <View style={styles.modalOverlay}>
             <Animated.View style={[styles.modalBackdrop, { opacity: notifyPickerBackdrop }]}>
               <Pressable
@@ -1571,7 +1590,7 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
         )}
 
         {/* Recurring Picker Modal */}
-        {showRecurringPicker && (
+        {recurringPickerMounted && (
           <View style={styles.modalOverlay}>
             <Animated.View style={[styles.modalBackdrop, { opacity: recurringPickerBackdrop }]}>
               <TouchableOpacity

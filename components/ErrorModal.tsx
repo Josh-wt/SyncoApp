@@ -56,12 +56,12 @@ export default function ErrorModal({
       const closeAnim = Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 0,
-          duration: 500,
+          duration: 250,
           useNativeDriver: true,
         }),
         Animated.timing(scaleAnim, {
-          toValue: 0.9,
-          duration: 500,
+          toValue: 0.95,
+          duration: 250,
           useNativeDriver: true,
         }),
       ]);

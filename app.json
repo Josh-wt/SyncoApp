@@ -11,6 +11,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.synco.app",
+      "usesAppleSignIn": true,
       "infoPlist": {
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": false,
@@ -64,9 +65,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "9cc148ed-4fba-4d55-b22b-85e489088983"
+        "projectId": "72a29ab2-21ff-4682-b4c2-10f2ef519011"
       }
     },
-    "owner": "joshbank"
+    "owner": "everythingenglish"
   }
 }

@@ -15,7 +15,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 const OPEN_FADE_DURATION = Platform.OS === 'ios' ? 200 : 240;
-const CLOSE_FADE_DURATION = Platform.OS === 'ios' ? 500 : 500;
 const SPRING_CONFIG = Platform.select({
   ios: { tension: 300, friction: 30 },
   android: { tension: 220, friction: 26 },
@@ -26,6 +25,7 @@ interface ActionOption {
   label: string;
   icon: keyof typeof MaterialIcons.glyphMap;
   color?: string;
+  description?: string;
   onPress: () => void;
 }
 
@@ -33,6 +33,7 @@ interface ActionPickerModalProps {
   visible: boolean;
   onClose: () => void;
   title: string;
+  quickActions?: ActionOption[];
   options: ActionOption[];
 }
 
@@ -40,6 +41,7 @@ export default function ActionPickerModal({
   visible,
   onClose,
   title,
+  quickActions = [],
   options,
 }: ActionPickerModalProps) {
   const insets = useSafeAreaInsets();
@@ -70,18 +72,11 @@ export default function ActionPickerModal({
     }
 
     if (isMounted) {
-      const closeAnim = Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 0,
-          duration: CLOSE_FADE_DURATION,
-          useNativeDriver: true,
-        }),
-        Animated.timing(slideAnim, {
-          toValue: SCREEN_HEIGHT,
-          duration: CLOSE_FADE_DURATION,
-          useNativeDriver: true,
-        }),
-      ]);
+      const closeAnim = Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      });
       closeAnim.start(({ finished }) => {
         if (finished) {
           setIsMounted(false);
@@ -147,32 +142,67 @@ export default function ActionPickerModal({
               {title}
             </Text>
 
+            {quickActions.length > 0 && (
+              <View style={styles.quickActionsSection}>
+                <Text style={styles.sectionLabel}>Quick Actions</Text>
+                <View style={styles.quickActionsGrid}>
+                  {quickActions.map((option) => (
+                    <Pressable
+                      key={option.id}
+                      style={({ pressed }) => [
+                        styles.quickActionCard,
+                        pressed && styles.quickActionCardPressed,
+                      ]}
+                      onPress={() => handleOptionPress(option)}
+                      accessibilityRole="button"
+                      accessibilityLabel={option.label}
+                    >
+                      <View style={styles.quickActionIcon}>
+                        <MaterialIcons name={option.icon} size={18} color={option.color || '#2F00FF'} />
+                      </View>
+                      <View style={styles.quickActionText}>
+                        <Text style={styles.quickActionLabel} numberOfLines={1}>
+                          {option.label}
+                        </Text>
+                        {option.description ? (
+                          <Text style={styles.quickActionDescription} numberOfLines={1}>
+                            {option.description}
+                          </Text>
+                        ) : null}
+                      </View>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+            )}
+
             <View style={styles.actions}>
               {options.map((option, index) => {
                 const isLast = index === options.length - 1;
                 return (
-                <Pressable
-                  key={option.id}
-                  style={({ pressed }) => [
-                    styles.actionRowHit,
-                    pressed && styles.actionRowPressed,
-                  ]}
-                  onPress={() => handleOptionPress(option)}
-                  hitSlop={{ top: 6, bottom: 6, left: 10, right: 10 }}
-                  accessibilityRole="button"
-                  accessibilityLabel={option.label}
-                >
-                  <View style={[styles.actionRow, !isLast && styles.actionRowDivider]}>
-                    <View style={styles.iconCircle}>
-                      <MaterialIcons name={option.icon} size={20} color={option.color || '#2F00FF'} />
+                  <Pressable
+                    key={option.id}
+                    style={({ pressed }) => [
+                      styles.actionRowHit,
+                      pressed && styles.actionRowPressed,
+                    ]}
+                    onPress={() => handleOptionPress(option)}
+                    hitSlop={{ top: 6, bottom: 6, left: 10, right: 10 }}
+                    accessibilityRole="button"
+                    accessibilityLabel={option.label}
+                  >
+                    <View style={[styles.actionRow, !isLast && styles.actionRowDivider]}>
+                      <View style={styles.iconCircle}>
+                        <MaterialIcons name={option.icon} size={20} color={option.color || '#2F00FF'} />
+                      </View>
+                      <Text style={styles.actionText} numberOfLines={1}>
+                        {option.label}
+                      </Text>
+                      <MaterialIcons name="chevron-right" size={20} color="#c7cdd8" />
                     </View>
-                    <Text style={styles.actionText} numberOfLines={1}>
-                      {option.label}
-                    </Text>
-                    <MaterialIcons name="chevron-right" size={20} color="#c7cdd8" />
-                  </View>
-                </Pressable>
-              )})}
+                  </Pressable>
+                );
+              })}
             </View>
 
             <View style={styles.cancelSection}>
@@ -238,6 +268,60 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: 24,
     marginBottom: 6,
+  },
+  quickActionsSection: {
+    paddingHorizontal: 12,
+    paddingTop: 4,
+    paddingBottom: 10,
+  },
+  sectionLabel: {
+    fontSize: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    fontFamily: 'BricolageGrotesque-Medium',
+    color: '#9ca3af',
+    marginBottom: 8,
+  },
+  quickActionsGrid: {
+    gap: 10,
+  },
+  quickActionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 16,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  quickActionCardPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.98 }],
+  },
+  quickActionIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: '#eef2ff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickActionText: {
+    flex: 1,
+  },
+  quickActionLabel: {
+    fontSize: 14,
+    fontFamily: 'BricolageGrotesque-SemiBold',
+    color: '#111827',
+    letterSpacing: -0.2,
+  },
+  quickActionDescription: {
+    fontSize: 12,
+    fontFamily: 'BricolageGrotesque-Regular',
+    color: '#6b7280',
+    marginTop: 2,
   },
   actions: {
     paddingHorizontal: 8,

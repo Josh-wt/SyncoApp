@@ -12,7 +12,6 @@ import { getTodayReminderCount } from '../lib/reminderLimits';
 import { useSubscription } from '../hooks/useSubscription';
 import type { UserPreferences, AccountCode, SnoozeMode } from '../lib/types';
 import { NOTIFICATION_TIMING_OPTIONS } from '../lib/types';
-import { setupNotificationCategory } from '../lib/notifications';
 import AccountCodeInput from '../components/settings/AccountCodeInput';
 import PaywallModal from '../components/PaywallModal';
 
@@ -175,14 +174,6 @@ export default function SettingsScreen() {
       if (updated) {
         setPreferences(updated);
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
-        // Re-setup notification category when snooze settings change
-        if ('snooze_mode' in updates || 'snooze_preset_values' in updates) {
-          await setupNotificationCategory(
-            updated.snooze_mode ?? 'text_input',
-            updated.snooze_preset_values ?? [5, 10, 15, 30]
-          );
-        }
       }
     } catch (error) {
       console.error('Error updating preference:', error);
@@ -755,6 +746,34 @@ export default function SettingsScreen() {
               </Pressable>
             </View>
           </View>
+        </AnimatedSection>
+
+        {/* Test Notification Button */}
+        <AnimatedSection delay={310}>
+          <AnimatedPressable
+            onPress={async () => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              const { sendTestNotification } = await import('../lib/notifications');
+              await sendTestNotification();
+              Alert.alert('Test Notification', 'A test notification will arrive in 5 seconds.');
+            }}
+            className="bg-white rounded-[40px] p-6 shadow-lg flex-row items-center justify-between"
+          >
+            <View className="flex-row items-center gap-4">
+              <View className="w-12 h-12 rounded-full bg-blue-50 items-center justify-center">
+                <MaterialIcons name="notifications-active" size={24} color="#3b82f6" />
+              </View>
+              <View>
+                <Text className="text-lg font-medium" style={{ fontFamily: 'BricolageGrotesque-Medium' }}>
+                  Test Notification
+                </Text>
+                <Text className="text-sm text-gray-400" style={{ fontFamily: 'BricolageGrotesque-Regular' }}>
+                  Send a test notification in 5 seconds
+                </Text>
+              </View>
+            </View>
+            <MaterialIcons name="chevron-right" size={24} color="#d1d5db" />
+          </AnimatedPressable>
         </AnimatedSection>
 
         {/* Sign Out Button */}

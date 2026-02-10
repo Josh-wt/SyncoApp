@@ -1,6 +1,10 @@
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
-import * as AppleAuthentication from 'expo-apple-authentication';
+import appleAuth, {
+  AppleError,
+  AppleRequestOperation,
+  AppleRequestScope,
+} from '@invertase/react-native-apple-authentication';
 import { supabase } from './supabase';
 
 const redirectUri = AuthSession.makeRedirectUri({
@@ -82,11 +86,14 @@ export async function signInWithApple() {
   try {
     console.log('🍎 [Apple Auth] Starting Apple sign-in flow');
 
-    const credential = await AppleAuthentication.signInAsync({
-      requestedScopes: [
-        AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
-        AppleAuthentication.AppleAuthenticationScope.EMAIL,
-      ],
+    if (!appleAuth.isSupported) {
+      console.error('🔴 [Apple Auth] Apple Sign In is not supported on this device');
+      throw new Error('Apple Sign In is not supported on this device');
+    }
+
+    const credential = await appleAuth.performRequest({
+      requestedOperation: AppleRequestOperation.LOGIN,
+      requestedScopes: [AppleRequestScope.FULL_NAME, AppleRequestScope.EMAIL],
     });
 
     console.log('🍎 [Apple Auth] Credential received:', {
@@ -122,7 +129,12 @@ export async function signInWithApple() {
     // Session is automatically set by signInWithIdToken, no need to set it again
     return data;
   } catch (error) {
-    if (error && typeof error === 'object' && 'code' in error && error.code === 'ERR_REQUEST_CANCELED') {
+    if (
+      error &&
+      typeof error === 'object' &&
+      'code' in error &&
+      error.code === AppleError.CANCELED
+    ) {
       // User canceled the sign-in
       console.log('⚠️ [Apple Auth] Sign-in canceled by user');
       return null;

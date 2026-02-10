@@ -13,16 +13,19 @@ import ProgressScreen from './ProgressScreen';
 import TimelineScreenV2 from './TimelineScreenV2';
 import SettingsScreen from './SettingsScreen';
 import { CreateReminderInput } from '../lib/types';
-import { lazy, Suspense } from 'react';
-
-// Lazy load ManualCreateScreen to avoid expo-audio initialization on app start
-const ManualCreateScreen = lazy(() => import('./ManualCreateScreen'));
+import ManualCreateScreen from './ManualCreateScreen';
 
 const HINT_STORAGE_KEY = '@synco_first_time_hint_shown';
 
 type Screen = 'home' | 'manual-create' | 'notifications' | 'timeline' | 'settings';
 
-export default function HomeScreen() {
+type NotificationOpenRequest = { id: string; at: number } | null;
+
+interface HomeScreenProps {
+  notificationOpenRequest?: NotificationOpenRequest;
+}
+
+export default function HomeScreen({ notificationOpenRequest }: HomeScreenProps) {
   const insets = useSafeAreaInsets();
   const { reminders, isLoading, error, addReminder } = useReminders();
   const [showFirstTimeHint, setShowFirstTimeHint] = useState(false);
@@ -46,6 +49,17 @@ export default function HomeScreen() {
     };
     checkFirstTime();
   }, []);
+
+  useEffect(() => {
+    if (!notificationOpenRequest?.id) return;
+    setCurrentScreen('notifications');
+    Animated.spring(slideAnim, {
+      toValue: 0,
+      useNativeDriver: true,
+      tension: 65,
+      friction: 10,
+    }).start();
+  }, [notificationOpenRequest, slideAnim]);
 
   const handleDismissHint = useCallback(async () => {
     setShowFirstTimeHint(false);
@@ -107,6 +121,7 @@ export default function HomeScreen() {
         onBack={handleBackToHome}
         onCreateReminder={handleCreateReminder}
         onTabPress={handleTabPress}
+        openReminderRequest={notificationOpenRequest ?? null}
       />
     );
   }
@@ -190,24 +205,21 @@ export default function HomeScreen() {
         />
       </Animated.View>
 
-      {/* Manual Create Screen - only render when active */}
-      {currentScreen === 'manual-create' && (
-        <Animated.View
-          style={[
-            styles.createScreenContainer,
-            {
-              transform: [{ translateX: createScreenTranslateX }],
-            },
-          ]}
-        >
-          <Suspense fallback={<View style={{ flex: 1, backgroundColor: '#f6f1ff' }} />}>
-            <ManualCreateScreen
-              onBack={handleBackToHome}
-              onSave={handleSaveReminder}
-            />
-          </Suspense>
-        </Animated.View>
-      )}
+      {/* Manual Create Screen - pre-rendered but off-screen */}
+      <Animated.View
+        style={[
+          styles.createScreenContainer,
+          {
+            transform: [{ translateX: createScreenTranslateX }],
+          },
+        ]}
+        pointerEvents={showCreateScreen ? 'auto' : 'none'}
+      >
+        <ManualCreateScreen
+          onBack={handleBackToHome}
+          onSave={handleSaveReminder}
+        />
+      </Animated.View>
     </View>
   );
 }

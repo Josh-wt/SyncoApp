@@ -19,7 +19,7 @@ import ActionPickerModal from '../components/ActionPickerModal';
 import SnoozePickerModal from '../components/SnoozePickerModal';
 import ErrorModal from '../components/ErrorModal';
 import { CreationMode } from '../components/CreateReminderModal';
-import { getOverdueReminders, updateReminderStatus, deleteReminder, snoozeReminder } from '../lib/reminders';
+import { getOverdueReminders, getReminderById, updateReminderStatus, deleteReminder, snoozeReminder } from '../lib/reminders';
 import { getReminderActions, executeReminderAction, getActionIcon } from '../lib/reminderActions';
 import { calculateUserAnalytics, UserAnalytics } from '../lib/analytics';
 import { generateRemmyMessage } from '../lib/progressTips';
@@ -33,6 +33,7 @@ interface ProgressScreenProps {
   onBack: () => void;
   onCreateReminder: (mode: CreationMode) => void;
   onTabPress: (tab: TabName) => void;
+  openReminderRequest?: { id: string; at: number } | null;
 }
 
 // Helper to format time
@@ -238,6 +239,7 @@ export default function ProgressScreen({
   onBack,
   onCreateReminder,
   onTabPress,
+  openReminderRequest,
 }: ProgressScreenProps) {
   const insets = useSafeAreaInsets();
   const [overdueReminders, setOverdueReminders] = useState<Reminder[]>([]);
@@ -245,10 +247,12 @@ export default function ProgressScreen({
   const [remmyMessage, setRemmyMessage] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [selectedReminder, setSelectedReminder] = useState<Reminder | null>(null);
+  const [selectedActions, setSelectedActions] = useState<ReminderAction[]>([]);
   const [showActionPicker, setShowActionPicker] = useState(false);
   const [showSnoozePicker, setShowSnoozePicker] = useState(false);
   const [showError, setShowError] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const lastOpenRequest = useRef<number | null>(null);
 
   const fetchProgressData = useCallback(async () => {
     try {
@@ -301,6 +305,42 @@ export default function ProgressScreen({
     };
   }, [fetchProgressData]);
 
+  useEffect(() => {
+    let isActive = true;
+    if (!selectedReminder) {
+      setSelectedActions([]);
+      return;
+    }
+
+    getReminderActions(selectedReminder.id)
+      .then((actions) => {
+        if (isActive) setSelectedActions(actions);
+      })
+      .catch((err) => console.error('Failed to fetch actions for picker:', err));
+
+    return () => {
+      isActive = false;
+    };
+  }, [selectedReminder]);
+
+  const openReminderById = useCallback(async (reminderId: string) => {
+    let reminder = overdueReminders.find((item) => item.id === reminderId) ?? null;
+    if (!reminder) {
+      reminder = await getReminderById(reminderId);
+    }
+    if (reminder) {
+      setSelectedReminder(reminder);
+      setShowActionPicker(true);
+    }
+  }, [overdueReminders]);
+
+  useEffect(() => {
+    if (!openReminderRequest?.id) return;
+    if (openReminderRequest.at === lastOpenRequest.current) return;
+    lastOpenRequest.current = openReminderRequest.at;
+    void openReminderById(openReminderRequest.id);
+  }, [openReminderRequest, openReminderById]);
+
   const handleCardPress = useCallback(
     (reminder: Reminder) => {
       setSelectedReminder(reminder);
@@ -308,6 +348,76 @@ export default function ProgressScreen({
     },
     []
   );
+
+  const handleQuickActionPress = useCallback(async (action: ReminderAction) => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      if (action.action_type === 'note') {
+        const noteText = action.action_value?.text?.trim() || 'No note saved.';
+        Alert.alert('Note', noteText);
+        return;
+      }
+      if (action.action_type === 'subtasks') {
+        const subtasksText = action.action_value?.text?.trim() || 'No subtasks added.';
+        Alert.alert('Subtasks', subtasksText);
+        return;
+      }
+      await executeReminderAction(action);
+    } catch (error) {
+      console.error('Failed to execute action:', error);
+      Alert.alert('Error', 'Failed to execute action');
+    }
+  }, []);
+
+  const quickActionOptions = selectedActions.map((action) => ({
+    id: action.id,
+    label: (() => {
+      switch (action.action_type) {
+        case 'call':
+          return 'Call';
+        case 'link':
+          return 'Open Link';
+        case 'email':
+          return 'Send Email';
+        case 'location':
+          return 'Navigate';
+        case 'note':
+          return 'View Note';
+        case 'subtasks':
+          return 'View Subtasks';
+        default:
+          return 'Action';
+      }
+    })(),
+    description: (() => {
+      switch (action.action_type) {
+        case 'call':
+          return action.action_value?.label || action.action_value?.phone || 'Phone number';
+        case 'link':
+          return action.action_value?.label || action.action_value?.url || 'Link';
+        case 'email':
+          return action.action_value?.label || action.action_value?.email || 'Email';
+        case 'location':
+          return action.action_value?.label || action.action_value?.address || 'Location';
+        case 'note':
+          return action.action_value?.text ? 'Saved note' : 'No note saved';
+        case 'subtasks':
+          return action.action_value?.text ? 'Checklist items' : 'No subtasks';
+        default:
+          return 'Quick action';
+      }
+    })(),
+    icon: getActionIcon(action.action_type) as keyof typeof MaterialIcons.glyphMap,
+    color: ({
+      call: '#14b8a6',
+      link: '#2563eb',
+      email: '#0ea5e9',
+      location: '#f97316',
+      note: '#64748b',
+      subtasks: '#84cc16',
+    } as Record<string, string>)[action.action_type] ?? '#2F00FF',
+    onPress: () => handleQuickActionPress(action),
+  }));
 
   const handleMarkComplete = useCallback(async () => {
     if (!selectedReminder) return;
@@ -453,6 +563,7 @@ export default function ProgressScreen({
         visible={showActionPicker}
         onClose={() => setShowActionPicker(false)}
         title={selectedReminder?.title || ''}
+        quickActions={quickActionOptions}
         options={[
           {
             id: 'complete',

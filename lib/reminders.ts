@@ -49,6 +49,21 @@ export async function getOverdueReminders(): Promise<Reminder[]> {
   return data ?? [];
 }
 
+export async function getReminderById(reminderId: string): Promise<Reminder | null> {
+  const { data, error } = await supabase
+    .from('reminders')
+    .select('*')
+    .eq('id', reminderId)
+    .single();
+
+  if (error) {
+    console.error('Failed to fetch reminder:', error);
+    return null;
+  }
+
+  return data ?? null;
+}
+
 export async function getTodayReminders(): Promise<Reminder[]> {
   const today = new Date();
   const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();

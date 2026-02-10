@@ -61,18 +61,11 @@ export default function ActionInputModal({
     }
 
     if (isMounted) {
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 0,
-          duration: 500,
-          useNativeDriver: true,
-        }),
-        Animated.timing(slideAnim, {
-          toValue: Dimensions.get('window').height,
-          duration: 500,
-          useNativeDriver: true,
-        }),
-      ]).start(({ finished }) => {
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start(({ finished }) => {
         if (finished) {
           setIsMounted(false);
         }

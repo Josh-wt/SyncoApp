@@ -6,14 +6,12 @@ import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { supabase } from './lib/supabase';
 import {
+  handleNotificationResponse,
   initializeNotifications,
   setupNotificationResponseHandler,
-  setupNotificationCategory,
   setupNotificationReceivedHandler,
   syncLocalReminderSchedules,
 } from './lib/notifications';
-import { getUserPreferences } from './lib/userPreferences';
-import { updateReminderStatus } from './lib/reminders';
 import { ThemeProvider } from './contexts/ThemeContext';
 import HomeScreen from './screens/HomeScreen';
 import OnboardingScreen from './screens/OnboardingScreen';
@@ -34,6 +32,7 @@ export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [showAuth, setShowAuth] = useState(false);
+  const [notificationOpenRequest, setNotificationOpenRequest] = useState<{ id: string; at: number } | null>(null);
   const notificationResponseListener = useRef<Notifications.EventSubscription | null>(null);
   const notificationReceivedListener = useRef<Notifications.EventSubscription | null>(null);
 
@@ -103,14 +102,6 @@ export default function App() {
       try {
         await initializeNotifications();
 
-        // Load user preferences to configure snooze mode
-        const prefs = await getUserPreferences();
-        await setupNotificationCategory(
-          prefs?.snooze_mode ?? 'text_input',
-          prefs?.snooze_preset_values ?? [5, 10, 15, 30]
-        );
-        console.log('Notification category configured successfully');
-
         await syncLocalReminderSchedules();
 
         notificationReceivedListener.current = setupNotificationReceivedHandler((notification) => {
@@ -120,16 +111,17 @@ export default function App() {
         notificationResponseListener.current = setupNotificationResponseHandler(
           (reminderId) => {
             console.log('Notification tapped for reminder:', reminderId);
+            setNotificationOpenRequest({ id: reminderId, at: Date.now() });
           },
-          async (reminderId) => {
-            try {
-              await updateReminderStatus(reminderId, 'completed');
-              console.log('Reminder marked as done from notification:', reminderId);
-            } catch (error) {
-              console.error('Failed to mark reminder as done:', error);
-            }
-          }
         );
+
+        const lastResponse = await Notifications.getLastNotificationResponseAsync();
+        if (lastResponse) {
+          await handleNotificationResponse(lastResponse, (reminderId) => {
+            console.log('Notification opened on launch for reminder:', reminderId);
+            setNotificationOpenRequest({ id: reminderId, at: Date.now() });
+          });
+        }
       } catch (error) {
         console.error('Failed to initialize notifications:', error);
       }
@@ -164,7 +156,7 @@ export default function App() {
   return (
     <ThemeProvider>
       {session ? (
-        <HomeScreen />
+        <HomeScreen notificationOpenRequest={notificationOpenRequest} />
       ) : showAuth ? (
         <AuthScreen onBack={() => setShowAuth(false)} />
       ) : (

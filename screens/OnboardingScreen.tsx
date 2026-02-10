@@ -14,7 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import * as AppleAuthentication from 'expo-apple-authentication';
+import appleAuth from '@invertase/react-native-apple-authentication';
 import { signInWithGoogle, signInWithApple } from '../lib/auth';
 
 interface OnboardingScreenProps {
@@ -23,9 +23,8 @@ interface OnboardingScreenProps {
 
 const SLIDES = [
   {
-    title: 'Never forget\nwhat matters',
+    title: 'Meet Remmy, Set Reminders. Finish Tasks.',
     image: require('../assets/zero.png'),
-    topImage: require('../assets/onetop.png'),
     isIntro: true,
   },
   {
@@ -39,8 +38,8 @@ const SLIDES = [
     topImage: require('../assets/onetop.png'),
   },
   {
-    title: 'Your reminders,\neverywhere',
-    image: require('../assets/twoo.png'),
+    title: 'Your reminders, everywhere.',
+    image: require('../assets/four.png'),
     topImage: require('../assets/onetop.png'),
   },
 ];
@@ -87,7 +86,9 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [loading, setLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
-  const [isAppleAuthAvailable, setIsAppleAuthAvailable] = useState(false);
+  const [isAppleAuthAvailable] = useState(
+    () => Platform.OS === 'ios' && appleAuth.isSupported
+  );
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
   const buttonScaleAnim = useRef(new Animated.Value(1)).current;
@@ -104,12 +105,6 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
 
   const isSignInSlide = currentSlide === SLIDES.length;
   const totalSlides = SLIDES.length + 1; // +1 for sign-in slide
-
-  useEffect(() => {
-    if (Platform.OS === 'ios') {
-      AppleAuthentication.isAvailableAsync().then(setIsAppleAuthAvailable);
-    }
-  }, []);
 
   // Staggered entry animation for sign-in slide
   useEffect(() => {
@@ -258,7 +253,16 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
           resizeMode="cover"
         />
 
-        <View style={[styles.signInContainer, { paddingTop: height * 0.18 }]}>
+        <Animated.View
+          style={[
+            styles.signInContainer,
+            {
+              paddingTop: height * 0.18,
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
+            },
+          ]}
+        >
           {/* Logo */}
           <Animated.View
             style={{
@@ -435,7 +439,7 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
               By continuing, you agree to our Terms of Service and Privacy Policy
             </Text>
           </Animated.View>
-        </View>
+        </Animated.View>
       </View>
     );
   }
@@ -443,11 +447,48 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
   const slide = SLIDES[currentSlide];
   const isSnoozeSlide = currentSlide === 2;
   const isSyncSlide = currentSlide === 3;
+  const isSecondSlide = currentSlide === 1;
+  const isThirdSlide = currentSlide === 2;
+  const isFourthSlide = currentSlide === 3;
   const hasTopImage = Boolean(slide.topImage);
   const imageScale = fadeAnim.interpolate({
     inputRange: [0, 1],
     outputRange: [0.96, 1],
   });
+  const defaultImageTop = slide.isIntro
+    ? hasTopImage
+      ? height * 0.32
+      : height * 0.25
+    : isSnoozeSlide
+    ? hasTopImage
+      ? height * 0.28
+      : height * 0.2
+    : isSyncSlide
+    ? hasTopImage
+      ? height * 0.26
+      : height * 0.18
+    : hasTopImage
+    ? height * 0.44
+    : height * 0.38;
+  const imageTop =
+    isSecondSlide || isThirdSlide ? height * 0.41 : isFourthSlide ? height * 0.32 : defaultImageTop;
+  const baseImageWidth = slide.isIntro
+    ? width * 0.5
+    : isSnoozeSlide
+    ? width * 0.75
+    : isSyncSlide
+    ? width * 0.9
+    : width * 1.3;
+  const baseImageHeight = slide.isIntro
+    ? width * 0.5
+    : isSnoozeSlide
+    ? width * 1.1
+    : isSyncSlide
+    ? width * 0.65
+    : width * 1.2;
+  const imageSizeScale = isThirdSlide ? 1.3 : 1;
+  const imageWidth = baseImageWidth * imageSizeScale;
+  const imageHeight = baseImageHeight * imageSizeScale;
 
   return (
     <View style={styles.container}>
@@ -482,21 +523,7 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
         style={[
           styles.oneImageWrap,
           {
-            top: slide.isIntro
-              ? hasTopImage
-                ? height * 0.32
-                : height * 0.25
-              : isSnoozeSlide
-              ? hasTopImage
-                ? height * 0.28
-                : height * 0.2
-              : isSyncSlide
-              ? hasTopImage
-                ? height * 0.26
-                : height * 0.18
-              : hasTopImage
-              ? height * 0.44
-              : height * 0.38,
+            top: imageTop,
             opacity: fadeAnim,
             transform: [{ translateY: slideAnim }, { scale: imageScale }],
           },
@@ -507,20 +534,8 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
           style={[
             styles.oneImage,
             {
-              width: slide.isIntro
-                ? width * 0.5
-                : isSnoozeSlide
-                ? width * 0.75
-                : isSyncSlide
-                ? width * 0.9
-                : width * 1.3,
-              height: slide.isIntro
-                ? width * 0.5
-                : isSnoozeSlide
-                ? width * 1.1
-                : isSyncSlide
-                ? width * 0.65
-                : width * 1.2,
+              width: imageWidth,
+              height: imageHeight,
             },
           ]}
           resizeMode="contain"

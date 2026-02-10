@@ -1,6 +1,7 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Animated,
+  Dimensions,
   Modal,
   Pressable,
   StyleSheet,
@@ -8,6 +9,8 @@ import {
   TextInput,
   View,
 } from 'react-native';
+
+const SCREEN_HEIGHT = Dimensions.get('window').height;
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import {
@@ -181,6 +184,59 @@ export default function RecurringRuleModal({
   );
   const [activePicker, setActivePicker] = useState<ActivePicker>(null);
   const [ruleName, setRuleName] = useState<string>(initialRule?.name ?? '');
+  const [isMounted, setIsMounted] = useState(visible);
+
+  // Animation values
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+  const scaleAnim = useRef(new Animated.Value(0.9)).current;
+
+  // Animate modal in/out
+  useEffect(() => {
+    if (visible) {
+      setIsMounted(true);
+      fadeAnim.setValue(0);
+      slideAnim.setValue(SCREEN_HEIGHT * 0.3);
+      scaleAnim.setValue(0.95);
+
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 250,
+          useNativeDriver: true,
+        }),
+        Animated.spring(slideAnim, {
+          toValue: 0,
+          tension: 65,
+          friction: 10,
+          useNativeDriver: true,
+        }),
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          tension: 80,
+          friction: 10,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else if (isMounted) {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(scaleAnim, {
+          toValue: 0.98,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]).start(({ finished }) => {
+        if (finished) {
+          setIsMounted(false);
+        }
+      });
+    }
+  }, [visible, isMounted, fadeAnim, slideAnim, scaleAnim]);
 
   const getUnitLabel = () => {
     const unit = FREQUENCY_UNITS.find(u => u.value === frequencyUnit);
@@ -234,15 +290,33 @@ export default function RecurringRuleModal({
 
   const timeDisplay = selectedTime ? formatTime(selectedTime) : '9:00 am';
 
+  if (!isMounted) return null;
+
   return (
     <Modal
-      visible={visible}
+      visible={isMounted}
       transparent
-      animationType="fade"
+      animationType="none"
       onRequestClose={onClose}
+      statusBarTranslucent
     >
-      <View style={styles.overlay}>
-        <View style={styles.modalContainer}>
+      <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+      </Animated.View>
+
+      <Animated.View
+        style={[
+          styles.modalContainer,
+          {
+            opacity: fadeAnim,
+            transform: [
+              { translateY: slideAnim },
+              { scale: scaleAnim },
+            ],
+          },
+        ]}
+      >
+        <View style={styles.modalContent}>
           {/* Header */}
           <View style={styles.header}>
             <Text style={styles.headerTitle}>Custom Schedule</Text>
@@ -336,6 +410,7 @@ export default function RecurringRuleModal({
             </BlurView>
           </AnimatedModalButton>
         </View>
+      </Animated.View>
 
         {/* Frequency Picker Modal */}
         <Modal
@@ -479,24 +554,28 @@ export default function RecurringRuleModal({
             </Pressable>
           </Pressable>
         </Modal>
-      </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
   overlay: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(18, 16, 24, 0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
   },
   modalContainer: {
+    position: 'absolute',
+    top: '50%',
+    left: 24,
+    right: 24,
+    marginTop: -200,
+    maxWidth: 380,
+    alignSelf: 'center',
+  },
+  modalContent: {
     backgroundColor: '#f6f1ff',
     borderRadius: 28,
     width: '100%',
-    maxWidth: 380,
     padding: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 20 },

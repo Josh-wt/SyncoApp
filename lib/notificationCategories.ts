@@ -118,15 +118,24 @@ export async function createDynamicNotificationCategory(
   actions: ReminderAction[],
   snoozeMinutes: number = 15
 ): Promise<string> {
+  console.log('🔔 [CATEGORY] Creating notification category for reminder:', reminderId);
+  console.log('🔔 [CATEGORY] Received actions:', JSON.stringify(actions, null, 2));
+  console.log('🔔 [CATEGORY] Snooze minutes:', snoozeMinutes);
+
   // Filter to only actionable types that can be executed from notification
   const actionableTypes: ReminderActionType[] = ['call', 'link', 'location', 'email'];
   const actionableActions = actions.filter(a =>
     actionableTypes.includes(a.action_type)
   );
 
+  console.log('🔔 [CATEGORY] Actionable actions (filtered):', actionableActions.length);
+  console.log('🔔 [CATEGORY] Actionable actions:', JSON.stringify(actionableActions, null, 2));
+
   // Generate category ID based on action types
   const actionTypes = actionableActions.map(a => a.action_type);
   const categoryId = generateCategoryId(actionTypes);
+
+  console.log('🔔 [CATEGORY] Generated category ID:', categoryId);
 
   const notificationActions: Notifications.NotificationAction[] = [];
 
@@ -156,15 +165,30 @@ export async function createDynamicNotificationCategory(
     },
   });
 
+  console.log('🔔 [CATEGORY] Total notification actions:', notificationActions.length);
+  console.log('🔔 [CATEGORY] Actions:', JSON.stringify(notificationActions, null, 2));
+
   // Create/update the category
-  await Notifications.setNotificationCategoryAsync(
-    categoryId,
-    notificationActions,
-    {
-      allowInCarPlay: true,
-      allowAnnouncement: true,
-    }
-  );
+  try {
+    await Notifications.setNotificationCategoryAsync(
+      categoryId,
+      notificationActions,
+      {
+        allowInCarPlay: true,
+        allowAnnouncement: true,
+      }
+    );
+    console.log('✅ [CATEGORY] Successfully registered category:', categoryId);
+
+    // Verify it was registered
+    const categories = await Notifications.getNotificationCategoriesAsync();
+    console.log('🔔 [CATEGORY] All registered categories:', categories.length);
+    console.log('🔔 [CATEGORY] Category IDs:', categories.map(c => c.identifier));
+
+  } catch (error) {
+    console.error('❌ [CATEGORY] Error registering category:', error);
+    throw error;
+  }
 
   return categoryId;
 }
