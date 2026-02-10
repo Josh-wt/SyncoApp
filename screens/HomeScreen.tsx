@@ -9,11 +9,14 @@ import Timeline from '../components/Timeline';
 import BottomNavBar, { TabName } from '../components/BottomNavBar';
 import { CreationMode } from '../components/CreateReminderModal';
 import { useReminders } from '../hooks/useReminders';
-import ManualCreateScreen from './ManualCreateScreen';
 import ProgressScreen from './ProgressScreen';
 import TimelineScreenV2 from './TimelineScreenV2';
 import SettingsScreen from './SettingsScreen';
 import { CreateReminderInput } from '../lib/types';
+import { lazy, Suspense } from 'react';
+
+// Lazy load ManualCreateScreen to avoid expo-audio initialization on app start
+const ManualCreateScreen = lazy(() => import('./ManualCreateScreen'));
 
 const HINT_STORAGE_KEY = '@synco_first_time_hint_shown';
 
@@ -198,10 +201,12 @@ export default function HomeScreen() {
         ]}
         pointerEvents={currentScreen === 'manual-create' ? 'auto' : 'none'}
       >
-        <ManualCreateScreen
-          onBack={handleBackToHome}
-          onSave={handleSaveReminder}
-        />
+        <Suspense fallback={<View style={{ flex: 1, backgroundColor: '#f6f1ff' }} />}>
+          <ManualCreateScreen
+            onBack={handleBackToHome}
+            onSave={handleSaveReminder}
+          />
+        </Suspense>
       </Animated.View>
     </View>
   );
