@@ -1,4 +1,4 @@
-import { File } from 'expo-file-system';
+import * as FileSystem from 'expo-file-system';
 import * as Device from 'expo-device';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -111,9 +111,10 @@ export function useVoiceRecording(): UseVoiceRecordingReturn {
         throw new Error('No recording URI');
       }
 
-      // Read the file as base64 using expo-file-system File class
-      const file = new File(uri);
-      const base64 = await file.base64();
+      // Read the file as base64 using expo-file-system
+      const base64 = await FileSystem.readAsStringAsync(uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
 
       // Determine mime type - HIGH_QUALITY preset uses m4a
       const mimeType = 'audio/m4a';

@@ -23,7 +23,7 @@ interface OnboardingScreenProps {
 
 const SLIDES = [
   {
-    title: 'Meet Remmy, Set Reminders. Finish Tasks.',
+    title: 'Meet Remmy\nSet Reminders. Finish Tasks.',
     image: require('../assets/zero.png'),
     isIntro: true,
   },
@@ -114,30 +114,30 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
       signInButtonsAnim.setValue(0);
       signInTermsAnim.setValue(0);
 
-      Animated.stagger(70, [
+      Animated.stagger(25, [
         Animated.spring(signInLogoAnim, {
           toValue: 1,
           useNativeDriver: true,
-          tension: 90,
-          friction: 10,
+          tension: 150,
+          friction: 12,
         }),
         Animated.spring(signInTitleAnim, {
           toValue: 1,
           useNativeDriver: true,
-          tension: 90,
-          friction: 10,
+          tension: 150,
+          friction: 12,
         }),
         Animated.spring(signInButtonsAnim, {
           toValue: 1,
           useNativeDriver: true,
-          tension: 90,
-          friction: 10,
+          tension: 150,
+          friction: 12,
         }),
         Animated.spring(signInTermsAnim, {
           toValue: 1,
           useNativeDriver: true,
-          tension: 90,
-          friction: 10,
+          tension: 150,
+          friction: 12,
         }),
       ]).start();
     }
@@ -151,30 +151,31 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
       Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 0,
-          duration: 180,
+          duration: 250,
           useNativeDriver: true,
         }),
-        Animated.timing(slideAnim, {
-          toValue: -40,
-          duration: 180,
+        Animated.spring(slideAnim, {
+          toValue: -30,
           useNativeDriver: true,
+          tension: 180,
+          friction: 16,
         }),
       ]).start(() => {
         setCurrentSlide(currentSlide + 1);
-        slideAnim.setValue(40);
+        slideAnim.setValue(30);
 
         Animated.parallel([
           Animated.spring(fadeAnim, {
             toValue: 1,
             useNativeDriver: true,
-            tension: 120,
-            friction: 14,
+            tension: 180,
+            friction: 16,
           }),
           Animated.spring(slideAnim, {
             toValue: 0,
             useNativeDriver: true,
-            tension: 120,
-            friction: 14,
+            tension: 180,
+            friction: 16,
           }),
         ]).start();
       });
@@ -471,22 +472,22 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
     ? height * 0.44
     : height * 0.38;
   const imageTop =
-    isSecondSlide || isThirdSlide ? height * 0.41 : isFourthSlide ? height * 0.32 : defaultImageTop;
+    isSecondSlide ? height * 0.41 : isThirdSlide ? height * 0.38 : isFourthSlide ? height * 0.36 : defaultImageTop;
   const baseImageWidth = slide.isIntro
-    ? width * 0.5
+    ? width * 0.65
     : isSnoozeSlide
     ? width * 0.75
     : isSyncSlide
     ? width * 0.9
     : width * 1.3;
   const baseImageHeight = slide.isIntro
-    ? width * 0.5
+    ? width * 0.65
     : isSnoozeSlide
     ? width * 1.1
     : isSyncSlide
     ? width * 0.65
     : width * 1.2;
-  const imageSizeScale = isThirdSlide ? 1.3 : 1;
+  const imageSizeScale = isThirdSlide ? 1.339 : 1;
   const imageWidth = baseImageWidth * imageSizeScale;
   const imageHeight = baseImageHeight * imageSizeScale;
 
@@ -559,7 +560,7 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
             ? {
                 left: 24,
                 right: 24,
-                top: height * 0.25 + width * 0.8 + 24,
+                top: height * 0.25 + width * 0.95 + 24,
                 opacity: fadeAnim,
                 transform: [{ translateY: slideAnim }, { scale: imageScale }],
               }
@@ -572,7 +573,7 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
               },
         ]}
       >
-        <Text style={[styles.headline, slide.isIntro && { textAlign: 'center', fontSize: 24 }]}>
+        <Text style={[styles.headline, slide.isIntro && { textAlign: 'center', fontSize: 24, lineHeight: 30 }]}>
           {slide.title}
         </Text>
         {!slide.isIntro && (

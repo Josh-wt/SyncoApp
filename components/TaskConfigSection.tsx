@@ -193,18 +193,19 @@ export default function TaskConfigSection({ onActionsChange }: TaskConfigSection
 
   return (
     <View style={styles.container}>
-      <Pressable
-        style={({ pressed }) => [
-          styles.headerContainer,
-          pressed && styles.headerPressed,
-        ]}
-        onPress={toggleExpanded}
-        accessible={true}
-        accessibilityRole="button"
-        accessibilityLabel={`Quick Actions. ${selectedCount} added`}
-        accessibilityState={{ expanded }}
-      >
-        <View style={styles.headerSurface}>
+      <View style={[styles.card, expanded && styles.cardExpanded]}>
+        <Pressable
+          style={({ pressed }) => [
+            styles.headerPressable,
+            expanded && styles.headerPressableExpanded,
+            pressed && styles.headerPressed,
+          ]}
+          onPress={toggleExpanded}
+          accessible={true}
+          accessibilityRole="button"
+          accessibilityLabel={`Quick Actions. ${selectedCount} added`}
+          accessibilityState={{ expanded }}
+        >
           <View style={styles.headerContent}>
             <View style={styles.headerBadge}>
               <MaterialIcons name="bolt" size={18} color="#0f172a" />
@@ -228,99 +229,99 @@ export default function TaskConfigSection({ onActionsChange }: TaskConfigSection
               </Animated.View>
             </View>
           </View>
-        </View>
-      </Pressable>
+        </Pressable>
 
-      <Animated.View
-        style={[
-          styles.contentWrapper,
-          {
-            height: contentHeight,
-            opacity: expandAnim,
-          },
-        ]}
-      >
-        <View style={styles.content}>
-          <View style={styles.sectionIntro}>
-            <Text style={styles.sectionTitle}>Build your action stack</Text>
-            <Text style={styles.sectionSubtitle}>
-              Add quick taps for calls, links, locations, notes, and subtasks.
-            </Text>
-          </View>
-
-          <View style={styles.actionsGrid}>
-            {QUICK_ACTIONS.map((action) => {
-              const isSelected = selectedActions.has(action.type);
-              const value = actionValues.get(action.type);
-
-              return (
-                <Pressable
-                  key={action.type}
-                  style={({ pressed }) => [
-                    styles.actionCard,
-                    pressed && styles.actionCardPressed,
-                  ]}
-                  onPress={() => toggleAction(action.type)}
-                  accessible={true}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${action.label}${isSelected ? '. Added' : ''}`}
-                >
-                  <View style={[styles.actionCardSurface, isSelected && styles.actionCardSurfaceSelected]}>
-                    {isSelected && (
-                      <LinearGradient
-                        colors={action.gradient}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        style={styles.actionGradient}
-                      />
-                    )}
-                    <View style={styles.actionCardContent}>
-                      <View
-                        style={[
-                          styles.actionIconWrapper,
-                          { backgroundColor: isSelected ? action.accent : action.surface },
-                        ]}
-                      >
-                        <MaterialIcons
-                          name={action.icon}
-                          size={22}
-                          color={isSelected ? '#ffffff' : action.accent}
-                        />
-                      </View>
-
-                      <View style={styles.actionInfo}>
-                        <Text style={styles.actionLabel}>{action.label}</Text>
-                        <Text style={styles.actionDescription} numberOfLines={1}>
-                          {isSelected && value ? getActionPreview(action.type, value) : action.description}
-                        </Text>
-                      </View>
-
-                      <View style={[styles.actionIndicator, isSelected && styles.actionIndicatorSelected]}>
-                        <MaterialIcons
-                          name={isSelected ? 'check' : 'add'}
-                          size={16}
-                          color={isSelected ? '#ffffff' : '#475569'}
-                        />
-                      </View>
-                    </View>
-                  </View>
-                </Pressable>
-              );
-            })}
-          </View>
-
-          {selectedCount > 0 && (
-            <View style={styles.selectedSummary}>
-              <View style={styles.summaryBadge}>
-                <MaterialIcons name="check-circle" size={18} color="#0f766e" />
-              </View>
-              <Text style={styles.summaryText}>
-                {selectedCount} action{selectedCount > 1 ? 's' : ''} will show up in your reminder
+        <Animated.View
+          style={[
+            styles.contentWrapper,
+            {
+              height: contentHeight,
+              opacity: expandAnim,
+            },
+          ]}
+        >
+          <View style={styles.contentSurface}>
+            <View style={styles.sectionIntro}>
+              <Text style={styles.sectionTitle}>Build your action stack</Text>
+              <Text style={styles.sectionSubtitle}>
+                Add quick taps for calls, links, locations, notes, and subtasks.
               </Text>
             </View>
-          )}
-        </View>
-      </Animated.View>
+
+            <View style={styles.actionsGrid}>
+              {QUICK_ACTIONS.map((action) => {
+                const isSelected = selectedActions.has(action.type);
+                const value = actionValues.get(action.type);
+
+                return (
+                  <Pressable
+                    key={action.type}
+                    style={({ pressed }) => [
+                      styles.actionCard,
+                      pressed && styles.actionCardPressed,
+                    ]}
+                    onPress={() => toggleAction(action.type)}
+                    accessible={true}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${action.label}${isSelected ? '. Added' : ''}`}
+                  >
+                    <View style={[styles.actionCardSurface, isSelected && styles.actionCardSurfaceSelected]}>
+                      {isSelected && (
+                        <LinearGradient
+                          colors={action.gradient}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 1 }}
+                          style={styles.actionGradient}
+                        />
+                      )}
+                      <View style={styles.actionCardContent}>
+                        <View
+                          style={[
+                            styles.actionIconWrapper,
+                            { backgroundColor: isSelected ? action.accent : action.surface },
+                          ]}
+                        >
+                          <MaterialIcons
+                            name={action.icon}
+                            size={22}
+                            color={isSelected ? '#ffffff' : action.accent}
+                          />
+                        </View>
+
+                        <View style={styles.actionInfo}>
+                          <Text style={styles.actionLabel}>{action.label}</Text>
+                          <Text style={styles.actionDescription} numberOfLines={1}>
+                            {isSelected && value ? getActionPreview(action.type, value) : action.description}
+                          </Text>
+                        </View>
+
+                        <View style={[styles.actionIndicator, isSelected && styles.actionIndicatorSelected]}>
+                          <MaterialIcons
+                            name={isSelected ? 'check' : 'add'}
+                            size={16}
+                            color={isSelected ? '#ffffff' : '#475569'}
+                          />
+                        </View>
+                      </View>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            {selectedCount > 0 && (
+              <View style={styles.selectedSummary}>
+                <View style={styles.summaryBadge}>
+                  <MaterialIcons name="check-circle" size={18} color="#0f766e" />
+                </View>
+                <Text style={styles.summaryText}>
+                  {selectedCount} action{selectedCount > 1 ? 's' : ''} will show up in your reminder
+                </Text>
+              </View>
+            )}
+          </View>
+        </Animated.View>
+      </View>
 
       <ActionInputModal
         visible={showActionModal}
@@ -336,7 +337,7 @@ const styles = StyleSheet.create({
   container: {
     marginBottom: 20,
   },
-  headerContainer: {
+  card: {
     borderRadius: 26,
     overflow: 'hidden',
     shadowColor: '#0f172a',
@@ -344,16 +345,25 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 14,
     elevation: 4,
-  },
-  headerPressed: {
-    opacity: 0.94,
-    transform: [{ scale: 0.98 }],
-  },
-  headerSurface: {
-    borderRadius: 26,
     backgroundColor: '#ffffff',
     borderWidth: 1,
     borderColor: '#e2e8f0',
+  },
+  cardExpanded: {
+    shadowOpacity: 0.12,
+  },
+  headerPressed: {
+    opacity: 0.96,
+    transform: [{ scale: 0.98 }],
+    backgroundColor: '#f8fafc',
+  },
+  headerPressable: {
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+  },
+  headerPressableExpanded: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#edf1f7',
   },
   headerContent: {
     flexDirection: 'row',
@@ -410,11 +420,13 @@ const styles = StyleSheet.create({
   contentWrapper: {
     overflow: 'hidden',
   },
-  content: {
+  contentSurface: {
     paddingTop: 18,
+    paddingBottom: 18,
+    paddingHorizontal: 16,
+    backgroundColor: '#f8fafc',
   },
   sectionIntro: {
-    paddingHorizontal: 4,
     marginBottom: 16,
   },
   sectionTitle: {
@@ -445,10 +457,15 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: '#ffffff',
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: 'rgba(148, 163, 184, 0.28)',
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
   actionCardSurfaceSelected: {
-    borderColor: '#cbd5f5',
+    borderColor: 'rgba(99, 102, 241, 0.25)',
   },
   actionGradient: {
     ...StyleSheet.absoluteFillObject,
@@ -489,8 +506,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#e2e8f0',
-    backgroundColor: '#f8fafc',
+    borderColor: '#e5e7eb',
+    backgroundColor: '#f1f5f9',
   },
   actionIndicatorSelected: {
     backgroundColor: '#0f766e',

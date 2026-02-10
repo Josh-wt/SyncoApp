@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Synco",
-    "slug": "synco",
+    "slug": "remmy",
     "scheme": "synco",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -13,6 +13,7 @@
       "bundleIdentifier": "com.synco.app",
       "usesAppleSignIn": true,
       "infoPlist": {
+        "NSMicrophoneUsageDescription": "Allow Synco to access your microphone to record voice reminders.",
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": false,
           "NSExceptionDomains": {
@@ -37,7 +38,8 @@
       "googleServicesFile": "./google-services.json",
       "permissions": [
         "INTERNET",
-        "ACCESS_NETWORK_STATE"
+        "ACCESS_NETWORK_STATE",
+        "RECORD_AUDIO"
       ],
       "usesCleartextTraffic": false
     },

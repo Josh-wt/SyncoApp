@@ -21,6 +21,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
+import * as Device from 'expo-device';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BackIcon, CalendarSmallIcon, ScheduleIcon, CheckAllIcon, GlowTopRight, GlowBottomLeft, BellNavIcon, RepeatIcon, ChevronRightIcon, CloseIcon, BlockIcon, DailyIcon, BookmarkIcon, SlidersIcon, CheckCircleIcon, MicSparkleIcon } from '../components/icons';
 import RecurringRuleModal from '../components/RecurringRuleModal';
@@ -795,11 +796,35 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
 
   // Check microphone permission on mount
   useEffect(() => {
-    import('expo-audio').then(({ AudioModule }) => {
-      AudioModule.getRecordingPermissionsAsync().then((status) => {
-        setHasPermission(status.granted);
-      });
-    });
+    let isMounted = true;
+
+    const checkPermissions = async () => {
+      if (!Device.isDevice) {
+        if (isMounted) {
+          setHasPermission(false);
+        }
+        return;
+      }
+
+      try {
+        const { AudioModule } = await import('expo-audio');
+        const status = await AudioModule.getRecordingPermissionsAsync();
+        if (isMounted) {
+          setHasPermission(status.granted);
+        }
+      } catch (err) {
+        console.warn('expo-audio unavailable:', err);
+        if (isMounted) {
+          setHasPermission(false);
+        }
+      }
+    };
+
+    checkPermissions();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
 
@@ -807,14 +832,25 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
   const handleMicPress = useCallback(async () => {
     if (isVoiceMode) return;
 
+    if (!Device.isDevice) {
+      setVoiceError('Audio recording is only available on physical devices.');
+      return;
+    }
+
     // Check and request permission if needed
     if (hasPermission === false) {
-      const { AudioModule } = await import('expo-audio');
-      const status = await AudioModule.requestRecordingPermissionsAsync();
-      setHasPermission(status.granted);
+      try {
+        const { AudioModule } = await import('expo-audio');
+        const status = await AudioModule.requestRecordingPermissionsAsync();
+        setHasPermission(status.granted);
 
-      if (!status.granted) {
-        setVoiceError('Microphone permission is required for voice reminders.');
+        if (!status.granted) {
+          setVoiceError('Microphone permission is required for voice reminders.');
+          return;
+        }
+      } catch (err) {
+        console.warn('expo-audio unavailable:', err);
+        setVoiceError('Voice recording is not available in this build.');
         return;
       }
     }

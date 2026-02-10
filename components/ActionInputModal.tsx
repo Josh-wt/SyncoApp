@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../contexts/ThemeContext';
 import { ReminderActionType } from '../lib/types';
 
@@ -34,6 +35,7 @@ export default function ActionInputModal({
   initialValue,
 }: ActionInputModalProps) {
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
   const [value, setValue] = useState<any>(initialValue || {});
   const [isMounted, setIsMounted] = useState(visible);
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -325,6 +327,7 @@ export default function ActionInputModal({
       animationType="none"
       transparent={true}
       onRequestClose={handleCancel}
+      statusBarTranslucent
     >
       <KeyboardAvoidingView
         style={styles.container}
@@ -334,43 +337,48 @@ export default function ActionInputModal({
           <Pressable style={StyleSheet.absoluteFillObject} onPress={handleCancel} />
         </Animated.View>
 
-        <Animated.View style={{ transform: [{ translateY: slideAnim }] }}>
-          <View style={[styles.modal, { backgroundColor: theme.colors.card }]}>
-          {/* Header */}
-          <View style={styles.header}>
-            <Text style={[styles.title, { color: theme.colors.text }]}>
-              {getTitle()}
-            </Text>
-            <Pressable onPress={handleCancel} style={styles.closeButton}>
-              <MaterialIcons name="close" size={24} color={theme.colors.text} />
-            </Pressable>
-          </View>
-
-          {/* Content */}
-          <ScrollView
-            style={styles.content}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
+        <Animated.View style={[styles.sheetWrapper, { transform: [{ translateY: slideAnim }] }]}>
+          <View
+            style={[
+              styles.modal,
+              { backgroundColor: theme.colors.card, paddingBottom: Math.max(insets.bottom, 8) },
+            ]}
           >
-            {renderInputFields()}
-          </ScrollView>
+            {/* Header */}
+            <View style={styles.header}>
+              <Text style={[styles.title, { color: theme.colors.text }]}>
+                {getTitle()}
+              </Text>
+              <Pressable onPress={handleCancel} style={styles.closeButton}>
+                <MaterialIcons name="close" size={24} color={theme.colors.text} />
+              </Pressable>
+            </View>
 
-          {/* Actions */}
-          <View style={styles.actions}>
-            <Pressable
-              style={[styles.button, styles.buttonCancel, { borderColor: theme.colors.border }]}
-              onPress={handleCancel}
+            {/* Content */}
+            <ScrollView
+              style={styles.content}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
             >
-              <Text style={[styles.buttonText, { color: theme.colors.text }]}>Cancel</Text>
-            </Pressable>
+              {renderInputFields()}
+            </ScrollView>
 
-            <Pressable
-              style={[styles.button, styles.buttonSave]}
-              onPress={handleSave}
-            >
-              <Text style={[styles.buttonText, styles.buttonTextSave]}>Save</Text>
-            </Pressable>
-          </View>
+            {/* Actions */}
+            <View style={styles.actions}>
+              <Pressable
+                style={[styles.button, styles.buttonCancel, { borderColor: theme.colors.border }]}
+                onPress={handleCancel}
+              >
+                <Text style={[styles.buttonText, { color: theme.colors.text }]}>Cancel</Text>
+              </Pressable>
+
+              <Pressable
+                style={[styles.button, styles.buttonSave]}
+                onPress={handleSave}
+              >
+                <Text style={[styles.buttonText, styles.buttonTextSave]}>Save</Text>
+              </Pressable>
+            </View>
           </View>
         </Animated.View>
       </KeyboardAvoidingView>
@@ -387,9 +395,14 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
+  sheetWrapper: {
+    width: '100%',
+  },
   modal: {
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
     maxHeight: '80%',
     shadowColor: '#000',
     shadowOpacity: 0.15,
