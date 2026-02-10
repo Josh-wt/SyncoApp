@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Dimensions,
@@ -40,13 +40,17 @@ export default function SnoozePickerModal({
   onSelect,
   title,
 }: SnoozePickerModalProps) {
+  const [isMounted, setIsMounted] = useState(visible);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
 
   useEffect(() => {
     if (visible) {
+      setIsMounted(true);
+      fadeAnim.setValue(0);
+      slideAnim.setValue(SCREEN_HEIGHT);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      Animated.parallel([
+      const openAnim = Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 1,
           duration: 200,
@@ -58,22 +62,32 @@ export default function SnoozePickerModal({
           friction: 30,
           useNativeDriver: true,
         }),
-      ]).start();
-    } else {
-      Animated.parallel([
+      ]);
+      openAnim.start();
+      return () => openAnim.stop();
+    }
+
+    if (isMounted) {
+      const closeAnim = Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 0,
-          duration: 150,
+          duration: 500,
           useNativeDriver: true,
         }),
         Animated.timing(slideAnim, {
           toValue: SCREEN_HEIGHT,
-          duration: 150,
+          duration: 500,
           useNativeDriver: true,
         }),
-      ]).start();
+      ]);
+      closeAnim.start(({ finished }) => {
+        if (finished) {
+          setIsMounted(false);
+        }
+      });
+      return () => closeAnim.stop();
     }
-  }, [visible, fadeAnim, slideAnim]);
+  }, [visible, isMounted, fadeAnim, slideAnim]);
 
   const handleClose = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -86,9 +100,11 @@ export default function SnoozePickerModal({
     onClose();
   };
 
+  if (!isMounted) return null;
+
   return (
     <Modal
-      visible={visible}
+      visible={isMounted}
       transparent
       animationType="none"
       onRequestClose={handleClose}

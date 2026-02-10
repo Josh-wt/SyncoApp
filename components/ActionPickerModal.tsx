@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Dimensions,
@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 const OPEN_FADE_DURATION = Platform.OS === 'ios' ? 200 : 240;
-const CLOSE_FADE_DURATION = Platform.OS === 'ios' ? 150 : 180;
+const CLOSE_FADE_DURATION = Platform.OS === 'ios' ? 500 : 500;
 const SPRING_CONFIG = Platform.select({
   ios: { tension: 300, friction: 30 },
   android: { tension: 220, friction: 26 },
@@ -43,13 +43,17 @@ export default function ActionPickerModal({
   options,
 }: ActionPickerModalProps) {
   const insets = useSafeAreaInsets();
+  const [isMounted, setIsMounted] = useState(visible);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
 
   useEffect(() => {
     if (visible) {
+      setIsMounted(true);
+      fadeAnim.setValue(0);
+      slideAnim.setValue(SCREEN_HEIGHT);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      Animated.parallel([
+      const openAnim = Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 1,
           duration: OPEN_FADE_DURATION,
@@ -60,9 +64,13 @@ export default function ActionPickerModal({
           ...(SPRING_CONFIG || { tension: 260, friction: 28 }),
           useNativeDriver: true,
         }),
-      ]).start();
-    } else {
-      Animated.parallel([
+      ]);
+      openAnim.start();
+      return () => openAnim.stop();
+    }
+
+    if (isMounted) {
+      const closeAnim = Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 0,
           duration: CLOSE_FADE_DURATION,
@@ -73,9 +81,15 @@ export default function ActionPickerModal({
           duration: CLOSE_FADE_DURATION,
           useNativeDriver: true,
         }),
-      ]).start();
+      ]);
+      closeAnim.start(({ finished }) => {
+        if (finished) {
+          setIsMounted(false);
+        }
+      });
+      return () => closeAnim.stop();
     }
-  }, [visible, fadeAnim, slideAnim]);
+  }, [visible, isMounted, fadeAnim, slideAnim]);
 
   const handleClose = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -88,9 +102,11 @@ export default function ActionPickerModal({
     onClose();
   };
 
+  if (!isMounted) return null;
+
   return (
     <Modal
-      visible={visible}
+      visible={isMounted}
       transparent
       animationType="none"
       onRequestClose={handleClose}

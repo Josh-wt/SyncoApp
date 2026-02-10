@@ -1,5 +1,5 @@
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { PlusCircleIcon } from './icons';
 
 // Animated Option Card Component
@@ -85,11 +85,15 @@ interface CreateReminderModalProps {
 }
 
 export default function CreateReminderModal({ visible, onSelectMode, onClose }: CreateReminderModalProps) {
+  const [isMounted, setIsMounted] = useState(visible);
   const slideAnim = useRef(new Animated.Value(300)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (visible) {
+      setIsMounted(true);
+      fadeAnim.setValue(0);
+      slideAnim.setValue(300);
       Animated.parallel([
         Animated.spring(slideAnim, {
           toValue: 0,
@@ -103,23 +107,31 @@ export default function CreateReminderModal({ visible, onSelectMode, onClose }: 
           useNativeDriver: true,
         }),
       ]).start();
-    } else {
-      Animated.parallel([
+      return;
+    }
+
+    if (isMounted) {
+      const closeAnim = Animated.parallel([
         Animated.timing(slideAnim, {
           toValue: 300,
-          duration: 140,
+          duration: 500,
           useNativeDriver: true,
         }),
         Animated.timing(fadeAnim, {
           toValue: 0,
-          duration: 120,
+          duration: 500,
           useNativeDriver: true,
         }),
-      ]).start();
+      ]);
+      closeAnim.start(({ finished }) => {
+        if (finished) {
+          setIsMounted(false);
+        }
+      });
     }
-  }, [visible, slideAnim, fadeAnim]);
+  }, [visible, isMounted, slideAnim, fadeAnim]);
 
-  if (!visible) return null;
+  if (!isMounted) return null;
 
   return (
     <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>

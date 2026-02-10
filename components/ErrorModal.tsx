@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Modal,
@@ -25,13 +25,17 @@ export default function ErrorModal({
   message,
   buttonText = 'OK',
 }: ErrorModalProps) {
+  const [isMounted, setIsMounted] = useState(visible);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
 
   useEffect(() => {
     if (visible) {
+      setIsMounted(true);
+      fadeAnim.setValue(0);
+      scaleAnim.setValue(0.9);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Animated.parallel([
+      const openAnim = Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 1,
           duration: 200,
@@ -43,31 +47,43 @@ export default function ErrorModal({
           friction: 20,
           useNativeDriver: true,
         }),
-      ]).start();
-    } else {
-      Animated.parallel([
+      ]);
+      openAnim.start();
+      return () => openAnim.stop();
+    }
+
+    if (isMounted) {
+      const closeAnim = Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 0,
-          duration: 150,
+          duration: 500,
           useNativeDriver: true,
         }),
         Animated.timing(scaleAnim, {
           toValue: 0.9,
-          duration: 150,
+          duration: 500,
           useNativeDriver: true,
         }),
-      ]).start();
+      ]);
+      closeAnim.start(({ finished }) => {
+        if (finished) {
+          setIsMounted(false);
+        }
+      });
+      return () => closeAnim.stop();
     }
-  }, [visible, fadeAnim, scaleAnim]);
+  }, [visible, isMounted, fadeAnim, scaleAnim]);
 
   const handleClose = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onClose();
   };
 
+  if (!isMounted) return null;
+
   return (
     <Modal
-      visible={visible}
+      visible={isMounted}
       transparent
       animationType="none"
       onRequestClose={handleClose}

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Dimensions,
@@ -29,9 +29,10 @@ export default function AnimatedModal({
   style,
   position = 'bottom',
   backdropOpacity = 0.5,
-  animationDuration = 300,
+  animationDuration = 500,
   slideDistance = 50,
 }: AnimatedModalProps) {
+  const [isMounted, setIsMounted] = useState(visible);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(slideDistance)).current;
   const scaleAnim = useRef(new Animated.Value(0.95)).current;
@@ -39,6 +40,11 @@ export default function AnimatedModal({
 
   useEffect(() => {
     if (visible) {
+      setIsMounted(true);
+      fadeAnim.setValue(0);
+      slideAnim.setValue(slideDistance);
+      scaleAnim.setValue(0.95);
+      backdropAnim.setValue(0);
       // Animate in
       Animated.parallel([
         Animated.timing(backdropAnim, {
@@ -65,34 +71,41 @@ export default function AnimatedModal({
           friction: 11,
         }),
       ]).start();
-    } else {
+      return;
+    }
+
+    if (isMounted) {
       // Animate out
       Animated.parallel([
         Animated.timing(backdropAnim, {
           toValue: 0,
-          duration: animationDuration * 0.4,
+          duration: animationDuration,
           useNativeDriver: true,
         }),
         Animated.timing(fadeAnim, {
           toValue: 0,
-          duration: animationDuration * 0.5,
+          duration: animationDuration,
           useNativeDriver: true,
         }),
         Animated.timing(slideAnim, {
           toValue: slideDistance,
-          duration: animationDuration * 0.5,
+          duration: animationDuration,
           useNativeDriver: true,
         }),
         Animated.timing(scaleAnim, {
           toValue: 0.95,
-          duration: animationDuration * 0.5,
+          duration: animationDuration,
           useNativeDriver: true,
         }),
-      ]).start();
+      ]).start(({ finished }) => {
+        if (finished) {
+          setIsMounted(false);
+        }
+      });
     }
-  }, [visible, fadeAnim, slideAnim, scaleAnim, backdropAnim, animationDuration, slideDistance]);
+  }, [visible, isMounted, fadeAnim, slideAnim, scaleAnim, backdropAnim, animationDuration, slideDistance]);
 
-  if (!visible) return null;
+  if (!isMounted) return null;
 
   const animatedBackdropOpacity = backdropAnim.interpolate({
     inputRange: [0, 1],

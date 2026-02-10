@@ -1,6 +1,6 @@
 import '../global.css';
-import { useState, useEffect } from 'react';
-import { Modal, View, Text, Pressable, ActivityIndicator, ScrollView } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Animated, Dimensions, Modal, Pressable, ActivityIndicator, ScrollView, StyleSheet, View, Text } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { getOfferings, purchasePackage, restorePurchases } from '../lib/revenueCat';
@@ -17,12 +17,56 @@ export default function PaywallModal({ visible, onClose, onPurchaseSuccess }: Pa
   const [selectedPackage, setSelectedPackage] = useState<PurchasesPackage | null>(null);
   const [loading, setLoading] = useState(true);
   const [purchasing, setPurchasing] = useState(false);
+  const [isMounted, setIsMounted] = useState(visible);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(Dimensions.get('window').height)).current;
 
   useEffect(() => {
     if (visible) {
       loadOfferings();
     }
   }, [visible]);
+
+  useEffect(() => {
+    if (visible) {
+      setIsMounted(true);
+      fadeAnim.setValue(0);
+      slideAnim.setValue(Dimensions.get('window').height);
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.spring(slideAnim, {
+          toValue: 0,
+          tension: 200,
+          friction: 24,
+          useNativeDriver: true,
+        }),
+      ]).start();
+      return;
+    }
+
+    if (isMounted) {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: Dimensions.get('window').height,
+          duration: 500,
+          useNativeDriver: true,
+        }),
+      ]).start(({ finished }) => {
+        if (finished) {
+          setIsMounted(false);
+        }
+      });
+    }
+  }, [visible, isMounted, fadeAnim, slideAnim]);
 
   const loadOfferings = async () => {
     try {
@@ -79,15 +123,27 @@ export default function PaywallModal({ visible, onClose, onPurchaseSuccess }: Pa
     }
   };
 
+  if (!isMounted) return null;
+
   return (
     <Modal
-      visible={visible}
-      animationType="slide"
+      visible={isMounted}
+      animationType="none"
       transparent
       onRequestClose={onClose}
     >
-      <View className="flex-1 bg-black/50 justify-end">
-        <View className="bg-[#f6f1ff] rounded-t-[40px] pt-6 pb-12 px-6" style={{ minHeight: '80%' }}>
+      <View className="flex-1 justify-end">
+        <Animated.View
+          style={[
+            StyleSheet.absoluteFillObject,
+            {
+              backgroundColor: '#000000',
+              opacity: fadeAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 0.5] }),
+            },
+          ]}
+        />
+        <Animated.View style={{ transform: [{ translateY: slideAnim }] }}>
+          <View className="bg-[#f6f1ff] rounded-t-[40px] pt-6 pb-12 px-6" style={{ minHeight: '80%' }}>
           {/* Header */}
           <View className="flex-row justify-between items-center mb-6">
             <Text className="text-3xl font-bold tracking-tight" style={{ fontFamily: 'BricolageGrotesque-Bold' }}>
@@ -225,7 +281,8 @@ export default function PaywallModal({ visible, onClose, onPurchaseSuccess }: Pa
               </Text>
             </ScrollView>
           )}
-        </View>
+          </View>
+        </Animated.View>
       </View>
     </Modal>
   );

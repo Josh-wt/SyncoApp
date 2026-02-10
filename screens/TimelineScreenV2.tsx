@@ -4,6 +4,7 @@ import {
   Animated,
   Pressable,
   ScrollView,
+  StyleSheet,
   Text,
   View,
   ActivityIndicator,
@@ -246,6 +247,9 @@ export default function TimelineScreenV2({
   const [feedback, setFeedback] = useState<FeedbackType>(null);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [datePickerMounted, setDatePickerMounted] = useState(false);
+  const datePickerFade = useRef(new Animated.Value(0)).current;
+  const datePickerSlide = useRef(new Animated.Value(240)).current;
   const [selectedReminder, setSelectedReminder] = useState<Reminder | null>(null);
   const [showSnoozePicker, setShowSnoozePicker] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -281,6 +285,47 @@ export default function TimelineScreenV2({
       subscription.unsubscribe();
     };
   }, [fetchReminders]);
+
+  useEffect(() => {
+    if (showDatePicker) {
+      setDatePickerMounted(true);
+      datePickerFade.setValue(0);
+      datePickerSlide.setValue(240);
+      Animated.parallel([
+        Animated.timing(datePickerFade, {
+          toValue: 1,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+        Animated.spring(datePickerSlide, {
+          toValue: 0,
+          tension: 220,
+          friction: 24,
+          useNativeDriver: true,
+        }),
+      ]).start();
+      return;
+    }
+
+    if (datePickerMounted) {
+      Animated.parallel([
+        Animated.timing(datePickerFade, {
+          toValue: 0,
+          duration: 500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(datePickerSlide, {
+          toValue: 240,
+          duration: 500,
+          useNativeDriver: true,
+        }),
+      ]).start(({ finished }) => {
+        if (finished) {
+          setDatePickerMounted(false);
+        }
+      });
+    }
+  }, [showDatePicker, datePickerMounted, datePickerFade, datePickerSlide]);
 
   const handleDeleteReminder = useCallback(
     (reminder: Reminder) => {
@@ -579,56 +624,66 @@ export default function TimelineScreenV2({
 
       {/* Date Picker Modal */}
       <Modal
-        visible={showDatePicker}
+        visible={datePickerMounted}
         transparent
-        animationType="slide"
+        animationType="none"
         onRequestClose={() => setShowDatePicker(false)}
       >
-        <TouchableOpacity
-          activeOpacity={1}
-          onPress={() => setShowDatePicker(false)}
-          className="flex-1 justify-end bg-black/50"
-        >
-          <TouchableOpacity activeOpacity={1} className="bg-white rounded-t-3xl p-6" style={{ paddingBottom: insets.bottom + 24 }}>
-            <View className="flex-row justify-between items-center mb-4">
-              <Text className="text-xl font-bold text-slate-900">Select Date</Text>
-              <Pressable onPress={() => setShowDatePicker(false)}>
-                <MaterialIcons name="close" size={24} color="#64748b" />
-              </Pressable>
-            </View>
-            <ScrollView className="max-h-80">
-              {dateOptions.map((date, index) => {
-                const isSelected = isSameDay(date, selectedDate);
-                const isToday = isSameDay(date, new Date());
-                return (
-                  <Pressable
-                    key={index}
-                    onPress={() => {
-                      setSelectedDate(date);
-                      setShowDatePicker(false);
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    }}
-                    className={`py-4 px-4 rounded-2xl mb-2 ${isSelected ? 'bg-primary' : 'bg-slate-50'}`}
-                  >
-                    <View className="flex-row justify-between items-center">
-                      <View>
-                        <Text className={`text-lg font-bold ${isSelected ? 'text-white' : 'text-slate-900'}`}>
-                          {date.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
-                        </Text>
-                        {isToday && (
-                          <Text className={`text-sm ${isSelected ? 'text-white/80' : 'text-slate-500'}`}>
-                            Today
+        <View className="flex-1 justify-end">
+          <Animated.View
+            style={[
+              StyleSheet.absoluteFillObject,
+              {
+                backgroundColor: '#000000',
+                opacity: datePickerFade.interpolate({ inputRange: [0, 1], outputRange: [0, 0.5] }),
+              },
+            ]}
+          >
+            <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setShowDatePicker(false)} />
+          </Animated.View>
+
+          <Animated.View style={{ transform: [{ translateY: datePickerSlide }] }}>
+            <TouchableOpacity activeOpacity={1} className="bg-white rounded-t-3xl p-6" style={{ paddingBottom: insets.bottom + 24 }}>
+              <View className="flex-row justify-between items-center mb-4">
+                <Text className="text-xl font-bold text-slate-900">Select Date</Text>
+                <Pressable onPress={() => setShowDatePicker(false)}>
+                  <MaterialIcons name="close" size={24} color="#64748b" />
+                </Pressable>
+              </View>
+              <ScrollView className="max-h-80">
+                {dateOptions.map((date, index) => {
+                  const isSelected = isSameDay(date, selectedDate);
+                  const isToday = isSameDay(date, new Date());
+                  return (
+                    <Pressable
+                      key={index}
+                      onPress={() => {
+                        setSelectedDate(date);
+                        setShowDatePicker(false);
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      }}
+                      className={`py-4 px-4 rounded-2xl mb-2 ${isSelected ? 'bg-primary' : 'bg-slate-50'}`}
+                    >
+                      <View className="flex-row justify-between items-center">
+                        <View>
+                          <Text className={`text-lg font-bold ${isSelected ? 'text-white' : 'text-slate-900'}`}>
+                            {date.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
                           </Text>
-                        )}
+                          {isToday && (
+                            <Text className={`text-sm ${isSelected ? 'text-white/80' : 'text-slate-500'}`}>
+                              Today
+                            </Text>
+                          )}
+                        </View>
+                        {isSelected && <MaterialIcons name="check" size={24} color="#fff" />}
                       </View>
-                      {isSelected && <MaterialIcons name="check" size={24} color="#fff" />}
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </TouchableOpacity>
-        </TouchableOpacity>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </TouchableOpacity>
+          </Animated.View>
+        </View>
       </Modal>
 
       {/* Snooze Picker Modal */}

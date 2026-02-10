@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Dimensions,
@@ -36,13 +36,17 @@ export default function ConfirmModal({
   confirmColor = '#ef4444',
   icon = 'warning',
 }: ConfirmModalProps) {
+  const [isMounted, setIsMounted] = useState(visible);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
 
   useEffect(() => {
     if (visible) {
+      setIsMounted(true);
+      fadeAnim.setValue(0);
+      scaleAnim.setValue(0.9);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      Animated.parallel([
+      const openAnim = Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 1,
           duration: 200,
@@ -54,22 +58,32 @@ export default function ConfirmModal({
           friction: 20,
           useNativeDriver: true,
         }),
-      ]).start();
-    } else {
-      Animated.parallel([
+      ]);
+      openAnim.start();
+      return () => openAnim.stop();
+    }
+
+    if (isMounted) {
+      const closeAnim = Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 0,
-          duration: 150,
+          duration: 500,
           useNativeDriver: true,
         }),
         Animated.timing(scaleAnim, {
           toValue: 0.9,
-          duration: 150,
+          duration: 500,
           useNativeDriver: true,
         }),
-      ]).start();
+      ]);
+      closeAnim.start(({ finished }) => {
+        if (finished) {
+          setIsMounted(false);
+        }
+      });
+      return () => closeAnim.stop();
     }
-  }, [visible, fadeAnim, scaleAnim]);
+  }, [visible, isMounted, fadeAnim, scaleAnim]);
 
   const handleConfirm = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
@@ -82,9 +96,11 @@ export default function ConfirmModal({
     onClose();
   };
 
+  if (!isMounted) return null;
+
   return (
     <Modal
-      visible={visible}
+      visible={isMounted}
       transparent
       animationType="none"
       onRequestClose={handleCancel}
