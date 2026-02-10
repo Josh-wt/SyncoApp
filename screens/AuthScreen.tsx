@@ -30,31 +30,39 @@ export default function AuthScreen({ onBack }: AuthScreenProps) {
   }, []);
 
   const handleGoogleSignIn = async () => {
+    console.log('🔵 [AuthScreen] Google sign-in button pressed');
     setLoading(true);
     setError(null);
 
     try {
-      await signInWithGoogle();
+      const result = await signInWithGoogle();
+      console.log('🔵 [AuthScreen] Google sign-in completed:', { hasResult: !!result });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to sign in with Google';
+      console.error('🔴 [AuthScreen] Google sign-in error:', err);
       setError(message);
       Alert.alert('Sign In Error', message);
     } finally {
+      console.log('🔵 [AuthScreen] Google sign-in flow ended');
       setLoading(false);
     }
   };
 
   const handleAppleSignIn = async () => {
+    console.log('🍎 [AuthScreen] Apple sign-in button pressed');
     setLoading(true);
     setError(null);
 
     try {
-      await signInWithApple();
+      const result = await signInWithApple();
+      console.log('🍎 [AuthScreen] Apple sign-in completed:', { hasResult: !!result });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to sign in with Apple';
+      console.error('🔴 [AuthScreen] Apple sign-in error:', err);
       setError(message);
       Alert.alert('Sign In Error', message);
     } finally {
+      console.log('🍎 [AuthScreen] Apple sign-in flow ended');
       setLoading(false);
     }
   };

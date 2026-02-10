@@ -1,5 +1,5 @@
-import { useAudioRecorder, RecordingPresets, AudioModule } from 'expo-audio';
 import { File } from 'expo-file-system';
+import * as Device from 'expo-device';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 export type RecordingStatus = 'idle' | 'recording' | 'processing' | 'error';
@@ -21,23 +21,22 @@ export function useVoiceRecording(): UseVoiceRecordingReturn {
 
   const durationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isRecordingRef = useRef(false);
-
-  // Create recorder with high quality preset
-  const recorder = useAudioRecorder(
-    RecordingPresets.HIGH_QUALITY,
-    (recordingStatus) => {
-      // Handle recording status updates if needed
-      if (recordingStatus.isFinished) {
-        isRecordingRef.current = false;
-      }
-    }
-  );
+  const recorderRef = useRef<any>(null);
 
   const requestPermissions = useCallback(async (): Promise<boolean> => {
     try {
+      // Check if running on physical device
+      if (!Device.isDevice) {
+        console.log('Audio recording is not available in simulator');
+        return false;
+      }
+
+      // Dynamically import expo-audio to avoid simulator crash
+      const { AudioModule } = await import('expo-audio');
       const permissionStatus = await AudioModule.requestRecordingPermissionsAsync();
       return permissionStatus.granted;
-    } catch {
+    } catch (err) {
+      console.error('Permission request failed:', err);
       return false;
     }
   }, []);
@@ -46,6 +45,13 @@ export function useVoiceRecording(): UseVoiceRecordingReturn {
     try {
       setError(null);
 
+      // Check if running on physical device
+      if (!Device.isDevice) {
+        setError('Audio recording is only available on physical devices, not in the simulator.');
+        setStatus('error');
+        return;
+      }
+
       const hasPermission = await requestPermissions();
       if (!hasPermission) {
         setError('Microphone permission is required to record voice reminders.');
@@ -53,8 +59,16 @@ export function useVoiceRecording(): UseVoiceRecordingReturn {
         return;
       }
 
-      // Prepare and start recording
-      await recorder.prepareToRecordAsync();
+      // Dynamically import and create recorder if not already created
+      if (!recorderRef.current) {
+        const { AudioRecorder, RecordingPresets } = await import('expo-audio');
+        recorderRef.current = new AudioRecorder();
+        await recorderRef.current.prepareToRecordAsync(RecordingPresets.HIGH_QUALITY);
+      }
+
+      const recorder = recorderRef.current;
+
+      // Start recording
       recorder.record();
 
       isRecordingRef.current = true;
@@ -71,7 +85,7 @@ export function useVoiceRecording(): UseVoiceRecordingReturn {
       setError('Failed to start recording. Please try again.');
       setStatus('error');
     }
-  }, [requestPermissions, recorder]);
+  }, [requestPermissions]);
 
   const stopRecording = useCallback(async (): Promise<{ uri: string; base64: string; mimeType: string } | null> => {
     // Clear duration timer
@@ -80,13 +94,14 @@ export function useVoiceRecording(): UseVoiceRecordingReturn {
       durationIntervalRef.current = null;
     }
 
-    if (!isRecordingRef.current) {
+    if (!isRecordingRef.current || !recorderRef.current) {
       return null;
     }
 
     setStatus('processing');
 
     try {
+      const recorder = recorderRef.current;
       await recorder.stop();
       isRecordingRef.current = false;
 
@@ -113,7 +128,7 @@ export function useVoiceRecording(): UseVoiceRecordingReturn {
       isRecordingRef.current = false;
       return null;
     }
-  }, [recorder]);
+  }, []);
 
   const cancelRecording = useCallback(async () => {
     if (durationIntervalRef.current) {
@@ -121,9 +136,9 @@ export function useVoiceRecording(): UseVoiceRecordingReturn {
       durationIntervalRef.current = null;
     }
 
-    if (isRecordingRef.current) {
+    if (isRecordingRef.current && recorderRef.current) {
       try {
-        await recorder.stop();
+        await recorderRef.current.stop();
       } catch {
         // Ignore errors during cancel
       }
@@ -133,7 +148,7 @@ export function useVoiceRecording(): UseVoiceRecordingReturn {
     setStatus('idle');
     setDuration(0);
     setError(null);
-  }, [recorder]);
+  }, []);
 
   // Cleanup on unmount
   useEffect(() => {

@@ -1,8 +1,9 @@
 import './global.css';
 import { useEffect, useRef, useState } from 'react';
-import { AppState, View } from 'react-native';
+import { AppState, View, Platform } from 'react-native';
 import { useFonts } from 'expo-font';
 import * as Notifications from 'expo-notifications';
+import * as Device from 'expo-device';
 import { supabase } from './lib/supabase';
 import {
   initializeNotifications,
@@ -38,17 +39,38 @@ export default function App() {
 
   // Preload native modules to prevent reload on first use
   useEffect(() => {
-    // Preload expo-audio and expo-file-system modules
-    import('expo-audio').catch(() => {});
-    import('expo-file-system').catch(() => {});
+    console.log('📦 [App] Preloading modules, Device.isDevice:', Device.isDevice);
+
+    // Only preload expo-audio on physical devices (not simulator)
+    // Simulator doesn't have microphone hardware and will crash
+    if (Device.isDevice) {
+      console.log('📦 [App] Preloading expo-audio on physical device');
+      import('expo-audio')
+        .then(() => console.log('✅ [App] expo-audio preloaded successfully'))
+        .catch((err) => {
+          console.error('🔴 [App] Failed to preload expo-audio:', err);
+        });
+    } else {
+      console.log('⚠️ [App] Skipping expo-audio preload (simulator detected)');
+    }
+
+    console.log('📦 [App] Preloading expo-file-system');
+    import('expo-file-system')
+      .then(() => console.log('✅ [App] expo-file-system preloaded'))
+      .catch((err) => console.error('🔴 [App] Failed to preload expo-file-system:', err));
   }, []);
 
   // Auth session effect
   useEffect(() => {
     let isMounted = true;
 
+    console.log('🔐 [App] Initializing auth session');
     supabase.auth.getSession().then(({ data }: { data: { session: Session } }) => {
       if (isMounted) {
+        console.log('🔐 [App] Initial session loaded:', {
+          hasSession: !!data.session,
+          userId: data.session?.user?.id
+        });
         setSession(data.session ?? null);
         setIsCheckingSession(false);
       }
@@ -56,11 +78,18 @@ export default function App() {
 
     const { data } = supabase.auth.onAuthStateChange((_event: string, nextSession: Session) => {
       if (isMounted) {
+        console.log('🔐 [App] Auth state changed:', {
+          event: _event,
+          hasSession: !!nextSession,
+          userId: nextSession?.user?.id,
+          userEmail: nextSession?.user?.email
+        });
         setSession(nextSession);
       }
     });
 
     return () => {
+      console.log('🔐 [App] Auth cleanup');
       isMounted = false;
       data.subscription.unsubscribe();
     };
@@ -126,8 +155,11 @@ export default function App() {
   }, [session]);
 
   if (!fontsLoaded || isCheckingSession) {
+    console.log('⏳ [App] Loading... fontsLoaded:', fontsLoaded, 'isCheckingSession:', isCheckingSession);
     return <View />;
   }
+
+  console.log('🎨 [App] Rendering screen, hasSession:', !!session, 'showAuth:', showAuth);
 
   return (
     <ThemeProvider>
