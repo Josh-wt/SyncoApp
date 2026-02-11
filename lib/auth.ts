@@ -1,5 +1,6 @@
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
+import { Platform } from 'react-native';
 import appleAuth from '@invertase/react-native-apple-authentication';
 import { supabase } from './supabase';
 
@@ -214,6 +215,25 @@ export async function signInWithApple() {
       console.log('⚠️ [Apple Auth] Sign-in canceled by user');
       return null;
     }
+
+    if (
+      error &&
+      typeof error === 'object' &&
+      'code' in error &&
+      error.code === appleAuth.Error.UNKNOWN
+    ) {
+      const platformHint =
+        Platform.OS === 'ios'
+          ? 'If testing on Simulator, try a real device or remove Simulator from your Apple ID devices list.'
+          : '';
+      const setupHint =
+        'Verify Sign in with Apple is enabled for your App ID (com.synco.app) and rebuild so the provisioning profile includes that capability.';
+      console.error('🔴 [Apple Auth] ASAuthorizationError 1000 details:', error);
+      throw new Error(
+        `Apple Sign In failed (ASAuthorizationError 1000). ${setupHint} ${platformHint}`.trim()
+      );
+    }
+
     console.error('🔴 [Apple Auth] Unexpected error:', error);
     throw error;
   }
