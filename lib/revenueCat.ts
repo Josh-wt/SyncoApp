@@ -1,9 +1,16 @@
 import Purchases, { PurchasesOffering, CustomerInfo, PurchasesPackage } from 'react-native-purchases';
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 
-// RevenueCat unified public SDK key (safe for client-side use)
-// This test key works for both iOS and Android in sandbox mode
-const REVENUECAT_PUBLIC_SDK_KEY = 'test_VztDxPSOfdZXaKLQsEkkEcDqEFs';
+// RevenueCat public SDK keys (safe for client-side use)
+const REVENUECAT_ANDROID_PUBLIC_SDK_KEY = 'goog_OJqyYaAaHBAPmIiPXSiwBYQGWOV';
+const REVENUECAT_IOS_PUBLIC_SDK_KEY = 'test_VztDxPSOfdZXaKLQsEkkEcDqEFs';
+
+function getRevenueCatPublicKey(): string {
+  if (Platform.OS === 'android') {
+    return REVENUECAT_ANDROID_PUBLIC_SDK_KEY;
+  }
+  return REVENUECAT_IOS_PUBLIC_SDK_KEY;
+}
 
 /**
  * Initialize RevenueCat SDK
@@ -11,12 +18,14 @@ const REVENUECAT_PUBLIC_SDK_KEY = 'test_VztDxPSOfdZXaKLQsEkkEcDqEFs';
  */
 export async function initializeRevenueCat(userId?: string) {
   try {
+    const apiKey = getRevenueCatPublicKey();
+
     // Enable debug mode in development BEFORE configure
     if (__DEV__) {
       Purchases.setLogLevel(Purchases.LOG_LEVEL.DEBUG);
     }
 
-    Purchases.configure({ apiKey: REVENUECAT_PUBLIC_SDK_KEY, appUserID: userId });
+    Purchases.configure({ apiKey, appUserID: userId });
   } catch (error) {
     // Initialization failed silently
   }
