@@ -227,7 +227,7 @@ export async function signInWithApple() {
           ? 'If testing on Simulator, try a real device or remove Simulator from your Apple ID devices list.'
           : '';
       const setupHint =
-        'Verify Sign in with Apple is enabled for your App ID (com.synco.app) and rebuild so the provisioning profile includes that capability.';
+        'Verify Sign in with Apple is enabled for your App ID (com.syncoapp.app) and rebuild so the provisioning profile includes that capability.';
       console.error('🔴 [Apple Auth] ASAuthorizationError 1000 details:', error);
       throw new Error(
         `Apple Sign In failed (ASAuthorizationError 1000). ${setupHint} ${platformHint}`.trim()

@@ -10,7 +10,7 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.synco.app",
+      "bundleIdentifier": "com.syncoapp.app",
       "usesAppleSignIn": true,
       "infoPlist": {
         "NSMicrophoneUsageDescription": "Allow Synco to access your microphone to record voice reminders.",
