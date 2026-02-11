@@ -1,10 +1,6 @@
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
-import appleAuth, {
-  AppleError,
-  AppleRequestOperation,
-  AppleRequestScope,
-} from '@invertase/react-native-apple-authentication';
+import appleAuth from '@invertase/react-native-apple-authentication';
 import { supabase } from './supabase';
 
 const redirectUri = AuthSession.makeRedirectUri({
@@ -163,8 +159,8 @@ export async function signInWithApple() {
     }
 
     const credential = await appleAuth.performRequest({
-      requestedOperation: AppleRequestOperation.LOGIN,
-      requestedScopes: [AppleRequestScope.FULL_NAME, AppleRequestScope.EMAIL],
+      requestedOperation: appleAuth.Operation.LOGIN,
+      requestedScopes: [appleAuth.Scope.FULL_NAME, appleAuth.Scope.EMAIL],
       nonceEnabled: true,
     });
 
@@ -212,7 +208,7 @@ export async function signInWithApple() {
       error &&
       typeof error === 'object' &&
       'code' in error &&
-      error.code === AppleError.CANCELED
+      error.code === appleAuth.Error.CANCELED
     ) {
       // User canceled the sign-in
       console.log('⚠️ [Apple Auth] Sign-in canceled by user');
