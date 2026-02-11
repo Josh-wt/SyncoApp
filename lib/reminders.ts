@@ -57,7 +57,6 @@ export async function getReminderById(reminderId: string): Promise<Reminder | nu
     .single();
 
   if (error) {
-    console.error('Failed to fetch reminder:', error);
     return null;
   }
 
@@ -246,6 +245,8 @@ export async function deleteRecurringRule(id: string): Promise<void> {
 
 // Snooze a reminder by specified minutes
 export async function snoozeReminder(id: string, minutes: number): Promise<Reminder> {
+  const normalizedMinutes = Math.max(1, Math.floor(minutes));
+
   // Get the current reminder
   const { data: reminder, error: fetchError } = await supabase
     .from('reminders')
@@ -255,9 +256,10 @@ export async function snoozeReminder(id: string, minutes: number): Promise<Remin
 
   if (fetchError) throw fetchError;
 
-  // Calculate new scheduled time
+  // Calculate new scheduled time from "now" if reminder time is already in the past.
   const currentScheduledTime = new Date(reminder.scheduled_time);
-  const newScheduledTime = new Date(currentScheduledTime.getTime() + minutes * 60 * 1000);
+  const baselineTime = Math.max(Date.now(), currentScheduledTime.getTime());
+  const newScheduledTime = new Date(baselineTime + normalizedMinutes * 60 * 1000);
 
   // Update the reminder with new scheduled time and reset notification fields
   const { data, error } = await supabase

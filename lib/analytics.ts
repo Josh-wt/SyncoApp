@@ -32,7 +32,6 @@ export async function calculateUserAnalytics(): Promise<UserAnalytics> {
       .order('scheduled_time', { ascending: true });
 
     if (fetchError || !allReminders) {
-      console.error('Error fetching reminders for analytics:', fetchError);
       return getDefaultAnalytics();
     }
 
@@ -86,8 +85,7 @@ export async function calculateUserAnalytics(): Promise<UserAnalytics> {
       thisWeekCompleted,
       preferredCompletionTimes,
     };
-  } catch (error) {
-    console.error('Error calculating user analytics:', error);
+  } catch {
     return getDefaultAnalytics();
   }
 }

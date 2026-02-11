@@ -14,10 +14,12 @@ import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
-const OPEN_FADE_DURATION = Platform.OS === 'ios' ? 200 : 240;
+const OPEN_FADE_DURATION = Platform.OS === 'ios' ? 160 : 180;
+const CLOSE_FADE_DURATION = 170;
+const CLOSE_SLIDE_DURATION = 190;
 const SPRING_CONFIG = Platform.select({
-  ios: { tension: 300, friction: 30 },
-  android: { tension: 220, friction: 26 },
+  ios: { tension: 320, friction: 32 },
+  android: { tension: 260, friction: 28 },
 });
 
 interface ActionOption {
@@ -72,11 +74,18 @@ export default function ActionPickerModal({
     }
 
     if (isMounted) {
-      const closeAnim = Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      });
+      const closeAnim = Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: CLOSE_FADE_DURATION,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: SCREEN_HEIGHT,
+          duration: CLOSE_SLIDE_DURATION,
+          useNativeDriver: true,
+        }),
+      ]);
       closeAnim.start(({ finished }) => {
         if (finished) {
           setIsMounted(false);
@@ -106,6 +115,7 @@ export default function ActionPickerModal({
       animationType="none"
       onRequestClose={handleClose}
       statusBarTranslucent
+      navigationBarTranslucent
     >
       <View style={styles.root}>
         <Animated.View

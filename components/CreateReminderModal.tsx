@@ -111,11 +111,18 @@ export default function CreateReminderModal({ visible, onSelectMode, onClose }: 
     }
 
     if (isMounted) {
-      const closeAnim = Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      });
+      const closeAnim = Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 170,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 300,
+          duration: 190,
+          useNativeDriver: true,
+        }),
+      ]);
       closeAnim.start(({ finished }) => {
         if (finished) {
           setIsMounted(false);

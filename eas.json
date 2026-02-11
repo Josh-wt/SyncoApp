@@ -29,6 +29,13 @@
         "simulator": false
       }
     },
+    "ios-ipa": {
+      "distribution": "internal",
+      "ios": {
+        "simulator": false,
+        "buildConfiguration": "Release"
+      }
+    },
     "production": {
       "autoIncrement": true,
       "ios": {

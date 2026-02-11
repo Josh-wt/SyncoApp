@@ -131,8 +131,7 @@ export default function NotificationsScreen({
       setIsLoading(true);
       const data = await getNotifiedReminders();
       setReminders(data);
-    } catch (error) {
-      console.error('Failed to fetch notifications:', error);
+    } catch {
     } finally {
       setIsLoading(false);
     }

@@ -28,6 +28,7 @@ import {
   snoozeReminder,
   updateReminderStatus,
 } from '../lib/reminders';
+import { syncReminderNotifications } from '../lib/notifications';
 import { Reminder } from '../lib/types';
 import { supabase } from '../lib/supabase';
 
@@ -129,6 +130,8 @@ function OrbitingNode({
   onDelete: () => void;
 }) {
   const [showActions, setShowActions] = useState(false);
+  const actionsHeightAnim = useRef(new Animated.Value(0)).current;
+  const actionsOpacityAnim = useRef(new Animated.Value(0)).current;
 
   // Dynamic width based on title length
   const getDynamicWidth = () => {
@@ -148,6 +151,22 @@ function OrbitingNode({
 
   const config = sizes[size];
   const dynamicWidth = getDynamicWidth();
+  const actionBarWidth = Math.min(dynamicWidth, size === 'tiny' ? 230 : 290);
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(actionsHeightAnim, {
+        toValue: showActions ? 44 : 0,
+        duration: 220,
+        useNativeDriver: false,
+      }),
+      Animated.timing(actionsOpacityAnim, {
+        toValue: showActions ? 1 : 0,
+        duration: 180,
+        useNativeDriver: false,
+      }),
+    ]).start();
+  }, [actionsHeightAnim, actionsOpacityAnim, showActions]);
 
   return (
     <View className="relative w-full flex items-center justify-center z-10">
@@ -202,37 +221,60 @@ function OrbitingNode({
           </Text>
         </View>
 
-        {/* Action Satellites */}
-        {showActions && (
-          <>
-            {/* Complete Satellite */}
-            <Pressable
-              onPress={onComplete}
-              className="absolute -right-8 top-12 w-12 h-12 bg-green-500 rounded-full flex items-center justify-center shadow-lg"
-              style={{ transform: [{ scale: 1 }] }}
-            >
-              <MaterialIcons name="check" size={24} color="#fff" />
-            </Pressable>
-
-            {/* Snooze Satellite */}
-            <Pressable
-              onPress={onSnooze}
-              className="absolute -left-6 top-16 w-10 h-10 bg-orange-400 rounded-full flex items-center justify-center shadow-lg"
-            >
-              <MaterialIcons name="snooze" size={20} color="#fff" />
-            </Pressable>
-
-            {/* Delete Satellite */}
-            <Pressable
-              onPress={onDelete}
-              className="absolute bottom-[-10px] left-1/2 w-10 h-10 bg-red-400 rounded-full flex items-center justify-center shadow-lg"
-              style={{ transform: [{ translateX: -20 }] }}
-            >
-              <MaterialIcons name="delete" size={20} color="#fff" />
-            </Pressable>
-          </>
-        )}
       </Pressable>
+
+      {/* Quick Actions - compact bottom bar */}
+      <Animated.View
+        style={{
+          width: actionBarWidth,
+          height: actionsHeightAnim,
+          opacity: actionsOpacityAnim,
+          marginTop: actionsHeightAnim.interpolate({
+            inputRange: [0, 44],
+            outputRange: [0, 10],
+          }),
+          overflow: 'hidden',
+        }}
+        pointerEvents={showActions ? 'auto' : 'none'}
+      >
+        <View className="h-full w-full rounded-full border border-slate-200 bg-white/95 shadow-lg px-1.5 flex-row items-center">
+          <Pressable
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              setShowActions(false);
+              onComplete();
+            }}
+            className="flex-1 h-8 rounded-full bg-emerald-500 flex-row items-center justify-center"
+          >
+            <MaterialIcons name="check" size={14} color="#fff" />
+            <Text className="text-white text-[11px] font-bold ml-1">Done</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              setShowActions(false);
+              onSnooze();
+            }}
+            className="flex-1 h-8 rounded-full bg-amber-500 flex-row items-center justify-center mx-1.5"
+          >
+            <MaterialIcons name="snooze" size={14} color="#fff" />
+            <Text className="text-white text-[11px] font-bold ml-1">Snooze</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              setShowActions(false);
+              onDelete();
+            }}
+            className="flex-1 h-8 rounded-full bg-rose-500 flex-row items-center justify-center"
+          >
+            <MaterialIcons name="delete" size={14} color="#fff" />
+            <Text className="text-white text-[11px] font-bold ml-1">Delete</Text>
+          </Pressable>
+        </View>
+      </Animated.View>
     </View>
   );
 }
@@ -262,8 +304,7 @@ export default function TimelineScreenV2({
       const allReminders = await getAllFutureReminders();
       const processed = processRemindersStatus(allReminders);
       setReminders(processed);
-    } catch (error) {
-      console.error('Error fetching reminders:', error);
+    } catch {
       setErrorMessage('Failed to load reminders');
       setShowError(true);
     } finally {
@@ -311,12 +352,12 @@ export default function TimelineScreenV2({
       Animated.parallel([
         Animated.timing(datePickerFade, {
           toValue: 0,
-          duration: 500,
+          duration: 190,
           useNativeDriver: true,
         }),
         Animated.timing(datePickerSlide, {
           toValue: 240,
-          duration: 500,
+          duration: 190,
           useNativeDriver: true,
         }),
       ]).start(({ finished }) => {
@@ -367,7 +408,8 @@ export default function TimelineScreenV2({
 
       try {
         await snoozeReminder(selectedReminder.id, minutes);
-        fetchReminders();
+        await fetchReminders();
+        void syncReminderNotifications();
         setFeedback('success');
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } catch (error) {

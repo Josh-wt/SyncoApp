@@ -11,6 +11,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -19,12 +20,12 @@ import ActionPickerModal from '../components/ActionPickerModal';
 import SnoozePickerModal from '../components/SnoozePickerModal';
 import ErrorModal from '../components/ErrorModal';
 import { CreationMode } from '../components/CreateReminderModal';
-import { getOverdueReminders, getReminderById, updateReminderStatus, deleteReminder, snoozeReminder } from '../lib/reminders';
+import { getOverdueReminders, getReminderById, updateReminderStatus, deleteReminder, snoozeReminder, getReminders, getRecurringRules } from '../lib/reminders';
+import { syncReminderNotifications } from '../lib/notifications';
 import { getReminderActions, executeReminderAction, getActionIcon } from '../lib/reminderActions';
-import { calculateUserAnalytics, UserAnalytics } from '../lib/analytics';
-import { generateRemmyMessage } from '../lib/progressTips';
-import { Reminder, ReminderAction } from '../lib/types';
+import { Reminder, ReminderAction, RecurringRule } from '../lib/types';
 import { supabase } from '../lib/supabase';
+import { CircularProgress } from '../src/shared/ui/organisms/circular-progress';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const SCREEN_HEIGHT = Dimensions.get('window').height;
@@ -34,6 +35,72 @@ interface ProgressScreenProps {
   onCreateReminder: (mode: CreationMode) => void;
   onTabPress: (tab: TabName) => void;
   openReminderRequest?: { id: string; at: number } | null;
+}
+
+interface CompletionMetric {
+  total: number;
+  completed: number;
+  percentage: number;
+}
+
+interface CompletionMetrics {
+  overall: CompletionMetric;
+  daily: CompletionMetric;
+  weekly: CompletionMetric;
+}
+
+const EMPTY_COMPLETION_METRIC: CompletionMetric = {
+  total: 0,
+  completed: 0,
+  percentage: 0,
+};
+
+const EMPTY_COMPLETION_METRICS: CompletionMetrics = {
+  overall: EMPTY_COMPLETION_METRIC,
+  daily: EMPTY_COMPLETION_METRIC,
+  weekly: EMPTY_COMPLETION_METRIC,
+};
+
+function toCompletionMetric(reminders: Reminder[]): CompletionMetric {
+  const validTasks = reminders.filter((reminder) => reminder.status !== 'placeholder');
+  const total = validTasks.length;
+  const completed = validTasks.filter((reminder) => reminder.status === 'completed').length;
+  return {
+    total,
+    completed,
+    percentage: total > 0 ? Math.round((completed / total) * 100) : 0,
+  };
+}
+
+function isWeeklyRule(rule: RecurringRule | undefined): boolean {
+  if (!rule) return false;
+  if (rule.frequency_unit === 'weeks') return true;
+  return rule.frequency_unit === 'days' && rule.frequency >= 7 && rule.frequency % 7 === 0;
+}
+
+function isDailyRule(rule: RecurringRule | undefined): boolean {
+  if (!rule) return false;
+  return rule.frequency_unit === 'days' && !isWeeklyRule(rule);
+}
+
+function buildCompletionMetrics(reminders: Reminder[], recurringRules: RecurringRule[]): CompletionMetrics {
+  const recurringRuleMap = new Map(recurringRules.map((rule) => [rule.id, rule]));
+
+  const dailyReminders = reminders.filter((reminder) => {
+    if (!reminder.recurring_rule_id) return false;
+    return isDailyRule(recurringRuleMap.get(reminder.recurring_rule_id));
+  });
+
+  const weeklyReminders = reminders.filter((reminder) => {
+    if (!reminder.recurring_rule_id) return false;
+    return isWeeklyRule(recurringRuleMap.get(reminder.recurring_rule_id));
+  });
+
+  return {
+    overall: toCompletionMetric(reminders),
+    daily: toCompletionMetric(dailyReminders),
+    weekly: toCompletionMetric(weeklyReminders),
+  };
 }
 
 // Helper to format time
@@ -143,11 +210,17 @@ function TaskCard({ reminder, priority, onPress }: { reminder: Reminder; priorit
 
   const widthPercentages = [1, 0.92, 0.88, 0.84, 0.80];
   const opacities = [1, 1, 1, 0.9, 0.6];
-  const shadowLevels = ['level3', 'level2', 'level1', 'soft', 'minimal'];
+  const shadowStyles = [
+    styles.shadowlevel3,
+    styles.shadowlevel2,
+    styles.shadowlevel1,
+    styles.shadowsoft,
+    styles.shadowminimal,
+  ];
 
   const cardWidth = SCREEN_WIDTH * 0.88 * widthPercentages[priority - 1];
   const cardOpacity = opacities[priority - 1];
-  const shadowStyle = styles[`shadow${shadowLevels[priority - 1]}` as keyof typeof styles];
+  const shadowStyle = shadowStyles[priority - 1];
 
   const actionIcon = getReminderIcon(reminder);
 
@@ -243,8 +316,7 @@ export default function ProgressScreen({
 }: ProgressScreenProps) {
   const insets = useSafeAreaInsets();
   const [overdueReminders, setOverdueReminders] = useState<Reminder[]>([]);
-  const [analytics, setAnalytics] = useState<UserAnalytics | null>(null);
-  const [remmyMessage, setRemmyMessage] = useState<string>('');
+  const [completionMetrics, setCompletionMetrics] = useState<CompletionMetrics>(EMPTY_COMPLETION_METRICS);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedReminder, setSelectedReminder] = useState<Reminder | null>(null);
   const [selectedActions, setSelectedActions] = useState<ReminderAction[]>([]);
@@ -253,14 +325,18 @@ export default function ProgressScreen({
   const [showError, setShowError] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const lastOpenRequest = useRef<number | null>(null);
+  const overallProgress = useSharedValue(0);
+  const dailyProgress = useSharedValue(0);
+  const weeklyProgress = useSharedValue(0);
 
   const fetchProgressData = useCallback(async () => {
     try {
       setIsLoading(true);
 
-      const [overdue, stats] = await Promise.all([
+      const [overdue, reminders, recurringRules] = await Promise.all([
         getOverdueReminders(),
-        calculateUserAnalytics(),
+        getReminders(),
+        getRecurringRules(),
       ]);
 
       // Sort by priority
@@ -271,16 +347,19 @@ export default function ProgressScreen({
         .map(item => item.reminder);
 
       setOverdueReminders(sortedOverdue);
-      setAnalytics(stats);
-
-      const message = generateRemmyMessage(stats, overdue.length);
-      setRemmyMessage(message);
+      setCompletionMetrics(buildCompletionMetrics(reminders, recurringRules));
     } catch (error) {
       console.error('Failed to fetch progress data:', error);
     } finally {
       setIsLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    overallProgress.value = withTiming(completionMetrics.overall.percentage, { duration: 380 });
+    dailyProgress.value = withTiming(completionMetrics.daily.percentage, { duration: 380 });
+    weeklyProgress.value = withTiming(completionMetrics.weekly.percentage, { duration: 380 });
+  }, [completionMetrics, overallProgress, dailyProgress, weeklyProgress]);
 
   useEffect(() => {
     fetchProgressData();
@@ -293,6 +372,17 @@ export default function ProgressScreen({
           event: '*',
           schema: 'public',
           table: 'reminders',
+        },
+        () => {
+          fetchProgressData();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'recurring_rules',
         },
         () => {
           fetchProgressData();
@@ -445,6 +535,7 @@ export default function ProgressScreen({
         await snoozeReminder(selectedReminder.id, minutes);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         await fetchProgressData();
+        void syncReminderNotifications();
       } catch (error) {
         setErrorMessage('Failed to snooze reminder');
         setShowError(true);
@@ -477,14 +568,6 @@ export default function ProgressScreen({
     [onBack, onTabPress]
   );
 
-  const timeOfDay = (() => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Morning';
-    if (hour < 17) return 'Afternoon';
-    if (hour < 21) return 'Evening';
-    return 'Night';
-  })();
-
   return (
     <View style={styles.root}>
       {/* Header buttons */}
@@ -508,10 +591,75 @@ export default function ProgressScreen({
       <ScrollView
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingTop: insets.top + 120, paddingBottom: insets.bottom + 120 },
+          { paddingTop: insets.top + 132, paddingBottom: insets.bottom + 120 },
         ]}
         showsVerticalScrollIndicator={false}
       >
+        <View style={styles.progressRingsContainer}>
+          <View style={styles.progressRingItem}>
+            <CircularProgress
+              progress={overallProgress}
+              size={90}
+              strokeWidth={5}
+              gap={2}
+              outerCircleColor="rgba(47, 0, 255, 0.16)"
+              progressCircleColor="#2F00FF"
+              backgroundColor="#ffffff"
+              renderIcon={() => (
+                <View style={styles.progressRingInner}>
+                  <Text style={styles.progressRingPercent}>{completionMetrics.overall.percentage}%</Text>
+                  <Text style={styles.progressRingFraction}>
+                    {completionMetrics.overall.completed}/{completionMetrics.overall.total}
+                  </Text>
+                </View>
+              )}
+            />
+            <Text style={styles.progressRingLabel}>All</Text>
+          </View>
+
+          <View style={styles.progressRingItem}>
+            <CircularProgress
+              progress={dailyProgress}
+              size={90}
+              strokeWidth={5}
+              gap={2}
+              outerCircleColor="rgba(14, 165, 233, 0.2)"
+              progressCircleColor="#0ea5e9"
+              backgroundColor="#ffffff"
+              renderIcon={() => (
+                <View style={styles.progressRingInner}>
+                  <Text style={styles.progressRingPercent}>{completionMetrics.daily.percentage}%</Text>
+                  <Text style={styles.progressRingFraction}>
+                    {completionMetrics.daily.completed}/{completionMetrics.daily.total}
+                  </Text>
+                </View>
+              )}
+            />
+            <Text style={styles.progressRingLabel}>Daily</Text>
+          </View>
+
+          <View style={styles.progressRingItem}>
+            <CircularProgress
+              progress={weeklyProgress}
+              size={90}
+              strokeWidth={5}
+              gap={2}
+              outerCircleColor="rgba(20, 184, 166, 0.2)"
+              progressCircleColor="#14b8a6"
+              backgroundColor="#ffffff"
+              renderIcon={() => (
+                <View style={styles.progressRingInner}>
+                  <Text style={styles.progressRingPercent}>{completionMetrics.weekly.percentage}%</Text>
+                  <Text style={styles.progressRingFraction}>
+                    {completionMetrics.weekly.completed}/{completionMetrics.weekly.total}
+                  </Text>
+                </View>
+              )}
+            />
+            <Text style={styles.progressRingLabel}>Weekly</Text>
+          </View>
+        </View>
+
         {/* Remmy Character */}
         <View style={styles.remmyContainer}>
           <Image
@@ -519,13 +667,6 @@ export default function ProgressScreen({
             style={styles.remmyImage}
             resizeMode="contain"
           />
-
-          <View style={styles.titleContainer}>
-            <Text style={styles.mainTitle}>PROGRESS</Text>
-            <Text style={styles.subtitle}>
-              {analytics ? `${analytics.completionRate}% Complete` : `${timeOfDay} View`}
-            </Text>
-          </View>
         </View>
 
         {isLoading ? (
@@ -638,33 +779,51 @@ const styles = StyleSheet.create({
   scrollContent: {
     alignItems: 'center',
   },
+  progressRingsContainer: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 18,
+    marginBottom: 26,
+  },
+  progressRingItem: {
+    alignItems: 'center',
+    width: 96,
+  },
+  progressRingInner: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  progressRingPercent: {
+    fontSize: 16,
+    fontFamily: 'BricolageGrotesque-Bold',
+    color: '#121118',
+    lineHeight: 18,
+  },
+  progressRingFraction: {
+    marginTop: 2,
+    fontSize: 9,
+    fontFamily: 'BricolageGrotesque-SemiBold',
+    color: '#606070',
+    lineHeight: 11,
+  },
+  progressRingLabel: {
+    marginTop: 10,
+    fontSize: 11,
+    fontFamily: 'BricolageGrotesque-Bold',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    color: '#3d3b46',
+  },
   remmyContainer: {
     alignItems: 'center',
-    marginBottom: 32,
+    marginTop: 14,
+    marginBottom: 36,
     zIndex: 20,
   },
   remmyImage: {
-    width: 112,
-    height: 112,
-    marginBottom: 24,
-  },
-  titleContainer: {
-    alignItems: 'center',
-  },
-  mainTitle: {
-    fontSize: 30,
-    fontFamily: 'BricolageGrotesque-Light',
-    letterSpacing: 6,
-    textTransform: 'uppercase',
-    color: '#121118',
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 12,
-    fontFamily: 'BricolageGrotesque-Bold',
-    letterSpacing: 2,
-    textTransform: 'uppercase',
-    color: '#2F00FF',
+    width: 124,
+    height: 124,
   },
   loadingContainer: {
     marginTop: 60,

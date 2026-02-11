@@ -144,6 +144,8 @@ interface RecurringRuleModalProps {
 }
 
 type ActivePicker = 'frequency' | 'unit' | 'days' | null;
+const MODAL_OPEN_DURATION = 180;
+const MODAL_CLOSE_DURATION = 190;
 
 const FREQUENCY_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
@@ -202,19 +204,19 @@ export default function RecurringRuleModal({
       Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 1,
-          duration: 250,
+          duration: MODAL_OPEN_DURATION,
           useNativeDriver: true,
         }),
         Animated.spring(slideAnim, {
           toValue: 0,
-          tension: 65,
-          friction: 10,
+          tension: 180,
+          friction: 24,
           useNativeDriver: true,
         }),
         Animated.spring(scaleAnim, {
           toValue: 1,
-          tension: 80,
-          friction: 10,
+          tension: 180,
+          friction: 24,
           useNativeDriver: true,
         }),
       ]).start();
@@ -222,12 +224,17 @@ export default function RecurringRuleModal({
       Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 0,
-          duration: 300,
+          duration: MODAL_CLOSE_DURATION,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: SCREEN_HEIGHT * 0.12,
+          duration: MODAL_CLOSE_DURATION,
           useNativeDriver: true,
         }),
         Animated.timing(scaleAnim, {
           toValue: 0.98,
-          duration: 300,
+          duration: MODAL_CLOSE_DURATION,
           useNativeDriver: true,
         }),
       ]).start(({ finished }) => {

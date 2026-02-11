@@ -12,6 +12,9 @@ import { MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
+const OPEN_FADE_DURATION = 170;
+const CLOSE_FADE_DURATION = 170;
+const CLOSE_SLIDE_DURATION = 190;
 
 interface SnoozeOption {
   minutes: number;
@@ -53,13 +56,13 @@ export default function SnoozePickerModal({
       const openAnim = Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 1,
-          duration: 200,
+          duration: OPEN_FADE_DURATION,
           useNativeDriver: true,
         }),
         Animated.spring(slideAnim, {
           toValue: 0,
-          tension: 300,
-          friction: 30,
+          tension: 320,
+          friction: 32,
           useNativeDriver: true,
         }),
       ]);
@@ -68,11 +71,18 @@ export default function SnoozePickerModal({
     }
 
     if (isMounted) {
-      const closeAnim = Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      });
+      const closeAnim = Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: CLOSE_FADE_DURATION,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: SCREEN_HEIGHT,
+          duration: CLOSE_SLIDE_DURATION,
+          useNativeDriver: true,
+        }),
+      ]);
       closeAnim.start(({ finished }) => {
         if (finished) {
           setIsMounted(false);

@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { ClipPath, Defs, Path, Rect } from 'react-native-svg';
 import { MaterialIcons } from '@expo/vector-icons';
-import { AddButtonIcon, BellNavIcon, TimelineNavIcon, AccountSettingsIcon } from './icons';
+import { AddButtonIcon, ProgressNavIcon, TimelineNavIcon, AccountSettingsIcon } from './icons';
 import { CreationMode } from './CreateReminderModal';
 
 // Animated FAB Component
@@ -63,31 +63,9 @@ function AnimatedNavIcon({
   children: React.ReactNode;
   label: string;
 }) {
-  const scaleAnim = useRef(new Animated.Value(1)).current;
-
-  const handlePressIn = () => {
-    Animated.spring(scaleAnim, {
-      toValue: 0.92,
-      useNativeDriver: true,
-      tension: 400,
-      friction: 10,
-    }).start();
-  };
-
-  const handlePressOut = () => {
-    Animated.spring(scaleAnim, {
-      toValue: 1,
-      useNativeDriver: true,
-      tension: 400,
-      friction: 10,
-    }).start();
-  };
-
   return (
     <Pressable
       onPress={onPress}
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
       hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
       accessible={true}
       accessibilityRole="button"
@@ -95,15 +73,14 @@ function AnimatedNavIcon({
       accessibilityState={{ selected: isActive }}
       accessibilityHint={`Navigate to ${label} screen`}
     >
-      <Animated.View
+      <View
         style={[
           styles.navIcon,
           isActive && styles.navIconActive,
-          { transform: [{ scale: scaleAnim }] },
         ]}
       >
         {children}
-      </Animated.View>
+      </View>
     </Pressable>
   );
 }
@@ -228,7 +205,7 @@ export default function BottomNavBar({
             </View>
             <View style={styles.navGroup}>
               <AnimatedNavIcon onPress={() => onTabPress?.('notifications')} isActive={activeTab === 'notifications'} label="Notifications">
-                <BellNavIcon color="#FFFFFF" />
+                <ProgressNavIcon color="#FFFFFF" />
               </AnimatedNavIcon>
               <AnimatedNavIcon onPress={() => onTabPress?.('settings')} isActive={activeTab === 'settings'} label="Settings">
                 <AccountSettingsIcon color="#FFFFFF" />

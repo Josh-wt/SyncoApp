@@ -24,6 +24,7 @@ import {
   snoozeReminder,
   updateReminderStatus,
 } from '../lib/reminders';
+import { syncReminderNotifications } from '../lib/notifications';
 import { Reminder } from '../lib/types';
 import { supabase } from '../lib/supabase';
 
@@ -96,8 +97,7 @@ export default function TimelineScreen({
       const data = await getAllFutureReminders();
       const processed = processRemindersStatus(data);
       setReminders(processed);
-    } catch (error) {
-      console.error('Failed to fetch reminders:', error);
+    } catch {
     } finally {
       setIsLoading(false);
     }
@@ -160,7 +160,8 @@ export default function TimelineScreen({
 
       try {
         await snoozeReminder(selectedReminder.id, minutes);
-        fetchReminders();
+        await fetchReminders();
+        void syncReminderNotifications();
         setFeedback('success');
       } catch (error) {
         setFeedback('error');

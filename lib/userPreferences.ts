@@ -23,7 +23,6 @@ export async function getUserPreferences(): Promise<UserPreferences | null> {
     if (error.code === 'PGRST116') {
       return await createDefaultPreferences();
     }
-    console.error('Error fetching user preferences:', error);
     return null;
   }
 
@@ -50,7 +49,6 @@ export async function createDefaultPreferences(): Promise<UserPreferences | null
     .single();
 
   if (error) {
-    console.error('Error creating default preferences:', error);
     return null;
   }
 
@@ -80,7 +78,6 @@ export async function updateUserPreferences(
     .single();
 
   if (error) {
-    console.error('Error updating user preferences:', error);
     return null;
   }
 
@@ -217,8 +214,7 @@ export async function exportUserData(): Promise<string | null> {
     };
 
     return JSON.stringify(exportData, null, 2);
-  } catch (error) {
-    console.error('Error exporting user data:', error);
+  } catch {
     return null;
   }
 }

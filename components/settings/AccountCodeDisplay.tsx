@@ -40,8 +40,7 @@ export default function AccountCodeDisplay({ onCodeGenerated }: AccountCodeDispl
       } else {
         Alert.alert('Error', 'Failed to generate account code. Please try again.');
       }
-    } catch (error) {
-      console.error('Error generating code:', error);
+    } catch {
       Alert.alert('Error', 'An unexpected error occurred.');
     } finally {
       setLoading(false);

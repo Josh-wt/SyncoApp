@@ -12,13 +12,11 @@ async function checkIsProUser(): Promise<boolean> {
     });
 
     if (error || !data) {
-      console.error('Error checking subscription:', error);
       return false;
     }
 
     return data.isProUser || false;
-  } catch (error) {
-    console.error('Error in checkIsProUser:', error);
+  } catch {
     return false;
   }
 }
@@ -49,8 +47,7 @@ export async function canCreateReminder(): Promise<{ allowed: boolean; reason?: 
     }
 
     return { allowed: true, count };
-  } catch (error) {
-    console.error('Error checking reminder limit:', error);
+  } catch {
     // In case of error, allow creation (fail open)
     return { allowed: true };
   }
@@ -79,13 +76,11 @@ export async function getTodayReminderCount(): Promise<number> {
       .gte('created_at', todayISO);
 
     if (error) {
-      console.error('Error fetching reminder count:', error);
       return 0;
     }
 
     return count || 0;
-  } catch (error) {
-    console.error('Error in getTodayReminderCount:', error);
+  } catch {
     return 0;
   }
 }
@@ -105,8 +100,7 @@ export async function getRemainingRemindersToday(): Promise<{ remaining: number;
     const remaining = Math.max(0, FREE_DAILY_LIMIT - count);
 
     return { remaining, limit: FREE_DAILY_LIMIT, isPro: false };
-  } catch (error) {
-    console.error('Error getting remaining reminders:', error);
+  } catch {
     return { remaining: 0, limit: FREE_DAILY_LIMIT, isPro: false };
   }
 }

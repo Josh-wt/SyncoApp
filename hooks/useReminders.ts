@@ -32,9 +32,12 @@ export function useReminders(): UseRemindersReturn {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (options?: { silent?: boolean }) => {
+    const silent = options?.silent ?? false;
     try {
-      setIsLoading(true);
+      if (!silent) {
+        setIsLoading(true);
+      }
       setError(null);
 
       const [upcomingReminders, priority, upcoming] = await Promise.all([
@@ -55,12 +58,14 @@ export function useReminders(): UseRemindersReturn {
     } catch (err) {
       setError(err instanceof Error ? err : new Error('Failed to fetch reminders'));
     } finally {
-      setIsLoading(false);
+      if (!silent) {
+        setIsLoading(false);
+      }
     }
   }, []);
 
   useEffect(() => {
-    fetchData();
+    void fetchData();
 
     // Set up real-time subscription
     const subscription = supabase
@@ -73,14 +78,16 @@ export function useReminders(): UseRemindersReturn {
           table: 'reminders',
         },
         () => {
-          // Refresh data when any changes occur
-          fetchData();
+          // Keep home UI stable while syncing realtime changes.
+          void fetchData({ silent: true });
         }
       )
       .subscribe();
 
     // Refresh status every minute to update current/upcoming states
-    const intervalId = setInterval(fetchData, 60000);
+    const intervalId = setInterval(() => {
+      void fetchData({ silent: true });
+    }, 60000);
 
     return () => {
       subscription.unsubscribe();
@@ -90,15 +97,25 @@ export function useReminders(): UseRemindersReturn {
 
   const addReminder = useCallback(async (input: CreateReminderInput): Promise<Reminder> => {
     const newReminder = await createReminder(input);
-    await fetchData();
-    await syncLocalReminderSchedules();
-    await sendResyncPush();
+
+    // Keep create UX snappy: refresh/sync in background.
+    setReminders((prev) => {
+      const merged = processRemindersStatus([...prev, newReminder])
+        .sort((a, b) => new Date(a.scheduled_time).getTime() - new Date(b.scheduled_time).getTime())
+        .slice(0, 6);
+      return merged;
+    });
+
+    void fetchData({ silent: true });
+    void syncLocalReminderSchedules();
+    void sendResyncPush();
+
     return newReminder;
   }, [fetchData]);
 
   const editReminder = useCallback(async (id: string, input: UpdateReminderInput): Promise<Reminder> => {
     const updated = await updateReminder(id, input);
-    await fetchData();
+    await fetchData({ silent: true });
     await syncLocalReminderSchedules();
     await sendResyncPush();
     return updated;
@@ -106,7 +123,7 @@ export function useReminders(): UseRemindersReturn {
 
   const removeReminder = useCallback(async (id: string): Promise<void> => {
     await deleteReminder(id);
-    await fetchData();
+    await fetchData({ silent: true });
     await syncLocalReminderSchedules();
     await sendResyncPush();
   }, [fetchData]);

@@ -29,7 +29,7 @@ export default function AnimatedModal({
   style,
   position = 'bottom',
   backdropOpacity = 0.5,
-  animationDuration = 800,
+  animationDuration = 260,
   slideDistance = 50,
 }: AnimatedModalProps) {
   const [isMounted, setIsMounted] = useState(visible);
@@ -79,17 +79,22 @@ export default function AnimatedModal({
       Animated.parallel([
         Animated.timing(backdropAnim, {
           toValue: 0,
-          duration: 300,
+          duration: 180,
           useNativeDriver: true,
         }),
         Animated.timing(fadeAnim, {
           toValue: 0,
-          duration: 300,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: slideDistance * 0.9,
+          duration: 180,
           useNativeDriver: true,
         }),
         Animated.timing(scaleAnim, {
           toValue: 0.98,
-          duration: 300,
+          duration: 180,
           useNativeDriver: true,
         }),
       ]).start(({ finished }) => {

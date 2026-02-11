@@ -14,6 +14,10 @@
       "usesAppleSignIn": true,
       "infoPlist": {
         "NSMicrophoneUsageDescription": "Allow Synco to access your microphone to record voice reminders.",
+        "UIBackgroundModes": [
+          "fetch",
+          "remote-notification"
+        ],
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": false,
           "NSExceptionDomains": {
@@ -39,7 +43,9 @@
       "permissions": [
         "INTERNET",
         "ACCESS_NETWORK_STATE",
-        "RECORD_AUDIO"
+        "RECORD_AUDIO",
+        "POST_NOTIFICATIONS",
+        "RECEIVE_BOOT_COMPLETED"
       ],
       "usesCleartextTraffic": false
     },

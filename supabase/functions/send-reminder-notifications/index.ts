@@ -168,7 +168,6 @@ Deno.serve(async (req) => {
       .lte('scheduled_time', new Date(now.getTime() + 60 * 60 * 1000).toISOString()); // Within next hour
 
     if (remindersError) {
-      console.error('Error fetching reminders:', remindersError);
       throw remindersError;
     }
 
@@ -188,7 +187,6 @@ Deno.serve(async (req) => {
       .not('notified_at', 'is', null); // Already had regular notification or we'll send it now
 
     if (priorityError) {
-      console.error('Error fetching priority reminders:', priorityError);
       throw priorityError;
     }
 
@@ -202,7 +200,6 @@ Deno.serve(async (req) => {
       .lte('scheduled_time', new Date(now.getTime() + 35 * 60 * 1000).toISOString()); // Within 35 min
 
     if (priorityNotYetError) {
-      console.error('Error fetching priority not yet notified:', priorityNotYetError);
       throw priorityNotYetError;
     }
 
@@ -235,7 +232,6 @@ Deno.serve(async (req) => {
       .in('user_id', Array.from(userIds));
 
     if (tokensError) {
-      console.error('Error fetching push tokens:', tokensError);
       throw tokensError;
     }
 
@@ -253,7 +249,6 @@ Deno.serve(async (req) => {
       .in('user_id', Array.from(userIds));
 
     if (prefsError) {
-      console.error('Error fetching user preferences:', prefsError);
       // Don't throw - just default to text_input mode
     }
 
@@ -371,14 +366,6 @@ Deno.serve(async (req) => {
     const deliveredReminderIds = new Set<string>();
     const failedReminderIds = new Set<string>();
 
-    console.info('Notif run stats', {
-      dueReminders: remindersToNotify.length,
-      priorityReminders: priorityToNotify.length,
-      tokensFetched: tokens?.length || 0,
-      expoMessages: messages.length,
-      fcmMessages: fcmMessages.length,
-    });
-
     // 6. Send notifications to Expo Push API
     if (messages.length > 0) {
       const response = await fetch(EXPO_PUSH_URL, {
@@ -392,12 +379,10 @@ Deno.serve(async (req) => {
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Expo Push API error:', errorText);
+        await response.text();
         // Don't throw; we'll leave reminders unmarked so they retry
       } else {
         const result = await response.json();
-        console.log('Expo Push response:', result);
 
         const tickets = Array.isArray(result?.data) ? result.data : [];
         tickets.forEach((ticket: any, idx: number) => {
@@ -405,10 +390,8 @@ Deno.serve(async (req) => {
           if (!reminderId) return;
           if (ticket?.status === 'ok') {
             deliveredReminderIds.add(reminderId);
-            console.info('Expo delivered', { reminderId });
           } else {
             failedReminderIds.add(reminderId);
-            console.error('Expo ticket error', { reminderId, ticket });
           }
         });
       }
@@ -455,8 +438,7 @@ Deno.serve(async (req) => {
         });
 
         if (!response.ok) {
-          const errorText = await response.text();
-          console.error('FCM Push API error:', { reminderId: message.reminderId, errorText });
+          await response.text();
           failedReminderIds.add(message.reminderId);
           continue;
         }
@@ -464,10 +446,8 @@ Deno.serve(async (req) => {
         const result = await response.json();
         if (result?.name) {
           deliveredReminderIds.add(message.reminderId);
-          console.info('FCM delivered', { reminderId: message.reminderId });
         } else {
           failedReminderIds.add(message.reminderId);
-          console.error('FCM response missing name', { result, reminderId: message.reminderId });
         }
       }
     }
@@ -481,7 +461,6 @@ Deno.serve(async (req) => {
         .in('id', successfulRegular);
 
       if (updateError) {
-        console.error('Error updating notified_at:', updateError);
       }
     }
 
@@ -493,19 +472,11 @@ Deno.serve(async (req) => {
         .in('id', successfulPriority);
 
       if (updateError) {
-        console.error('Error updating priority_notified_at:', updateError);
       }
     }
 
     const totalDelivered = deliveredReminderIds.size;
     const totalFailed = failedReminderIds.size;
-    console.info('Notif run done', {
-      delivered: Array.from(deliveredReminderIds),
-      failed: Array.from(failedReminderIds),
-      regularNotificationIds,
-      priorityNotificationIds,
-    });
-
     return new Response(
       JSON.stringify({
         message: 'Notification attempt finished',
@@ -520,7 +491,6 @@ Deno.serve(async (req) => {
       }
     );
   } catch (error) {
-    console.error('Edge function error:', error);
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
       {

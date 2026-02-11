@@ -276,11 +276,10 @@ export async function executeReminderAction(action: ReminderAction): Promise<voi
     case 'voice':
     case 'subtasks':
       // These are informational actions, not executable
-      console.log(`Action ${action.action_type} is informational only`);
       break;
 
     default:
-      console.warn(`Unknown action type: ${action.action_type}`);
+      break;
   }
 }
 

@@ -1,61 +1,132 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.91.1';
 
 interface VoiceRequest {
-  audio: string; // base64 encoded audio
+  audio?: string; // base64 encoded audio
   mimeType?: string; // audio/wav, audio/webm, etc.
   timezoneOffset?: number; // User's timezone offset in minutes (e.g., -480 for UTC+8)
 }
 
 const OPENAI_API_URL = 'https://api.openai.com/v1';
 
-async function transcribeAudio(audioBase64: string, mimeType: string, apiKey: string): Promise<string> {
-  // Convert base64 to binary
-  const binaryString = atob(audioBase64);
-  const bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
+const EXTENSION_BY_MIME: Record<string, string> = {
+  'audio/wav': 'wav',
+  'audio/wave': 'wav',
+  'audio/x-wav': 'wav',
+  'audio/webm': 'webm',
+  'audio/mp4': 'm4a',
+  'audio/m4a': 'm4a',
+  'audio/mpeg': 'mp3',
+  'audio/mp3': 'mp3',
+  'audio/ogg': 'ogg',
+};
+
+function normalizeBase64(input: string): string {
+  return input.replace(/^data:.*;base64,/, '').replace(/\s/g, '');
+}
+
+function resolveMimeType(mimeType?: string, fileType?: string, fileName?: string): string {
+  const trimmed = mimeType?.trim();
+  if (trimmed) return trimmed;
+
+  const fileTypeTrimmed = fileType?.trim();
+  if (fileTypeTrimmed) return fileTypeTrimmed;
+
+  const lowerName = fileName?.toLowerCase() || '';
+  if (lowerName.endsWith('.m4a') || lowerName.endsWith('.mp4')) return 'audio/mp4';
+  if (lowerName.endsWith('.mp3')) return 'audio/mpeg';
+  if (lowerName.endsWith('.wav')) return 'audio/wav';
+  if (lowerName.endsWith('.ogg') || lowerName.endsWith('.oga')) return 'audio/ogg';
+  if (lowerName.endsWith('.webm')) return 'audio/webm';
+
+  return 'audio/wav';
+}
+
+function resolveExtension(mimeType: string, fileName?: string): string {
+  const match = fileName?.toLowerCase().match(/\.([a-z0-9]+)$/);
+  if (match) return match[1];
+  return EXTENSION_BY_MIME[mimeType] || 'wav';
+}
+
+/**
+ * Fix Android 3GP files: Android often produces 3GP4 containers even when MPEG4 is
+ * requested. These are identical to MP4 internally (same ISO BMFF structure, same AAC
+ * audio) but Whisper rejects the 3GP brand. Patching 4 bytes in the ftyp box fixes it.
+ */
+function fixAndroid3gpHeader(bytes: Uint8Array): Uint8Array {
+  // ftyp box: [size:4][ftyp:4][brand:4][version:4]
+  // Check for 'ftyp' at offset 4 and '3gp' at offset 8
+  if (
+    bytes.length > 12 &&
+    bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70 && // 'ftyp'
+    bytes[8] === 0x33 && bytes[9] === 0x67 && bytes[10] === 0x70 // '3gp'
+  ) {
+    const fixed = new Uint8Array(bytes);
+    fixed[8] = 0x69;  // 'i'
+    fixed[9] = 0x73;  // 's'
+    fixed[10] = 0x6f; // 'o'
+    fixed[11] = 0x6d; // 'm'
+    return fixed;
   }
+  return bytes;
+}
 
-  // Determine file extension from mime type
-  const extMap: Record<string, string> = {
-    'audio/wav': 'wav',
-    'audio/wave': 'wav',
-    'audio/x-wav': 'wav',
-    'audio/webm': 'webm',
-    'audio/mp4': 'm4a',
-    'audio/m4a': 'm4a',
-    'audio/mpeg': 'mp3',
-    'audio/mp3': 'mp3',
-    'audio/ogg': 'ogg',
-  };
-  const ext = extMap[mimeType] || 'wav';
+async function transcribeAudio(audioInput: string | File, mimeType: string | undefined, apiKey: string): Promise<string> {
+  try {
+    const resolvedMimeType =
+      typeof audioInput === 'string'
+        ? resolveMimeType(mimeType)
+        : resolveMimeType(mimeType, audioInput.type, audioInput.name);
 
-  // Create form data for Whisper API
-  const formData = new FormData();
-  const blob = new Blob([bytes], { type: mimeType });
-  formData.append('file', blob, `audio.${ext}`);
-  formData.append('model', 'whisper-1');
-  formData.append('language', 'en');
+    const formData = new FormData();
 
-  const response = await fetch(`${OPENAI_API_URL}/audio/transcriptions`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: formData,
-  });
+    if (typeof audioInput === 'string') {
+      const normalized = normalizeBase64(audioInput);
+      const binaryString = atob(normalized);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Whisper API failed: ${errorText}`);
+      const fixedBytes = fixAndroid3gpHeader(bytes);
+      const ext = resolveExtension(resolvedMimeType);
+      const file = new File([fixedBytes as BlobPart], `audio.${ext}`, { type: resolvedMimeType });
+      formData.append('file', file);
+    } else {
+      // Read the file bytes so we can fix Android 3GP headers
+      const rawBytes = new Uint8Array(await audioInput.arrayBuffer());
+      const fixedBytes = fixAndroid3gpHeader(rawBytes);
+      const ext = resolveExtension(resolvedMimeType, audioInput.name);
+      const fileName = audioInput.name?.includes('.') ? audioInput.name : `audio.${ext}`;
+      const fixedFile = new File([fixedBytes as BlobPart], fileName, { type: resolvedMimeType });
+      formData.append('file', fixedFile, fileName);
+    }
+
+    formData.append('model', 'whisper-1');
+    formData.append('language', 'en');
+
+    const response = await fetch(`${OPENAI_API_URL}/audio/transcriptions`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Whisper API failed (${response.status}): ${errorText}`);
+    }
+
+    const data = await response.json();
+    return data.text;
+  } catch (error) {
+    throw error;
   }
-
-  const data = await response.json();
-  return data.text;
 }
 
 async function detectIntent(transcript: string, apiKey: string): Promise<{ isReminderRequest: boolean; reasoning?: string }> {
-  const systemPrompt = `You are an AI assistant that determines if a user's input is a reminder creation request or general conversation.
+  try {
+    const systemPrompt = `You are an AI assistant that determines if a user's input is a reminder creation request or general conversation.
 
 Analyze the user's transcript and determine if they want to:
 1. CREATE A REMINDER - includes requests like "remind me to...", "set a reminder...", "don't forget...", "tomorrow at 3pm...", time-based tasks, recurring events, etc.
@@ -83,50 +154,55 @@ Examples of CONVERSATION:
 
 Return ONLY valid JSON without markdown code blocks.`;
 
-  const response = await fetch(`${OPENAI_API_URL}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: 'gpt-4o-mini',
-      temperature: 0.1,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: transcript.trim() },
-      ],
-    }),
-  });
+    const response = await fetch(`${OPENAI_API_URL}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        temperature: 0.1,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: transcript.trim() },
+        ],
+      }),
+    });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Intent detection failed: ${errorText}`);
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Intent detection failed (${response.status}): ${errorText}`);
+    }
+
+    const data = await response.json();
+
+    const content = data?.choices?.[0]?.message?.content;
+
+    if (!content) {
+      throw new Error('No content returned from intent detection');
+    }
+
+    let cleanContent = content.trim();
+    if (cleanContent.startsWith('```json')) {
+      cleanContent = cleanContent.slice(7);
+    } else if (cleanContent.startsWith('```')) {
+      cleanContent = cleanContent.slice(3);
+    }
+    if (cleanContent.endsWith('```')) {
+      cleanContent = cleanContent.slice(0, -3);
+    }
+    cleanContent = cleanContent.trim();
+
+    const parsed = JSON.parse(cleanContent);
+    return parsed;
+  } catch (error) {
+    throw error;
   }
-
-  const data = await response.json();
-  const content = data?.choices?.[0]?.message?.content;
-
-  if (!content) {
-    throw new Error('No content returned from intent detection');
-  }
-
-  let cleanContent = content.trim();
-  if (cleanContent.startsWith('```json')) {
-    cleanContent = cleanContent.slice(7);
-  } else if (cleanContent.startsWith('```')) {
-    cleanContent = cleanContent.slice(3);
-  }
-  if (cleanContent.endsWith('```')) {
-    cleanContent = cleanContent.slice(0, -3);
-  }
-  cleanContent = cleanContent.trim();
-
-  return JSON.parse(cleanContent);
 }
 
 async function generateConversationalResponse(transcript: string, apiKey: string): Promise<string> {
-  const systemPrompt = `You are a helpful AI assistant for a reminder app called Synco.
+  const systemPrompt = `You are a helpful AI assistant for a reminder app called Remmy.
 
 Be friendly, concise, and helpful. Keep responses brief (1-3 sentences).
 
@@ -169,17 +245,18 @@ Be conversational and warm, but don't be overly verbose.`;
 }
 
 async function parseReminderFromTranscript(transcript: string, apiKey: string, timezoneOffset: number = 0): Promise<object> {
-  // Get user's local time - timezoneOffset is inverted (negative = UTC+)
-  const nowUTC = new Date();
-  const localTime = new Date(nowUTC.getTime() - timezoneOffset * 60000);
+  try {
+    // Get user's local time - timezoneOffset is inverted (negative = UTC+)
+    const nowUTC = new Date();
+    const localTime = new Date(nowUTC.getTime() - timezoneOffset * 60000);
 
-  // Simple timezone string formatting
-  const offsetHours = Math.floor(Math.abs(timezoneOffset) / 60);
-  const offsetMinutes = Math.abs(timezoneOffset) % 60;
-  const offsetSign = timezoneOffset <= 0 ? '+' : '-';
-  const timezone = `${offsetSign}${String(offsetHours).padStart(2, '0')}:${String(offsetMinutes).padStart(2, '0')}`;
+    // Simple timezone string formatting
+    const offsetHours = Math.floor(Math.abs(timezoneOffset) / 60);
+    const offsetMinutes = Math.abs(timezoneOffset) % 60;
+    const offsetSign = timezoneOffset <= 0 ? '+' : '-';
+    const timezone = `${offsetSign}${String(offsetHours).padStart(2, '0')}:${String(offsetMinutes).padStart(2, '0')}`;
 
-  const systemPrompt = `Convert voice input to reminder JSON.
+    const systemPrompt = `Convert voice input to reminder JSON.
 
 TIMEZONE: ${timezone}
 CURRENT TIME: ${localTime.toISOString().slice(0, 19)}${timezone}
@@ -223,47 +300,52 @@ MULTIPLE: "call mom and buy groceries" = 2 separate reminders
 
 Return JSON only.`;
 
-  const response = await fetch(`${OPENAI_API_URL}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: 'gpt-4o-mini',
-      temperature: 0.2,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: transcript.trim() },
-      ],
-    }),
-  });
+    const response = await fetch(`${OPENAI_API_URL}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        temperature: 0.2,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: transcript.trim() },
+        ],
+      }),
+    });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`GPT API failed: ${errorText}`);
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`GPT API failed (${response.status}): ${errorText}`);
+    }
+
+    const data = await response.json();
+
+    const content = data?.choices?.[0]?.message?.content;
+
+    if (!content) {
+      throw new Error('No content returned from GPT');
+    }
+
+    // Clean up potential markdown code blocks
+    let cleanContent = content.trim();
+    if (cleanContent.startsWith('```json')) {
+      cleanContent = cleanContent.slice(7);
+    } else if (cleanContent.startsWith('```')) {
+      cleanContent = cleanContent.slice(3);
+    }
+    if (cleanContent.endsWith('```')) {
+      cleanContent = cleanContent.slice(0, -3);
+    }
+    cleanContent = cleanContent.trim();
+
+    const parsed = JSON.parse(cleanContent);
+    return parsed;
+  } catch (error) {
+    throw error;
   }
-
-  const data = await response.json();
-  const content = data?.choices?.[0]?.message?.content;
-
-  if (!content) {
-    throw new Error('No content returned from GPT');
-  }
-
-  // Clean up potential markdown code blocks
-  let cleanContent = content.trim();
-  if (cleanContent.startsWith('```json')) {
-    cleanContent = cleanContent.slice(7);
-  } else if (cleanContent.startsWith('```')) {
-    cleanContent = cleanContent.slice(3);
-  }
-  if (cleanContent.endsWith('```')) {
-    cleanContent = cleanContent.slice(0, -3);
-  }
-  cleanContent = cleanContent.trim();
-
-  return JSON.parse(cleanContent);
 }
 
 Deno.serve(async (req) => {
@@ -309,17 +391,76 @@ Deno.serve(async (req) => {
     });
   }
 
-  let payload: VoiceRequest;
-  try {
-    payload = await req.json();
-  } catch {
-    return new Response(JSON.stringify({ error: 'Invalid JSON' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' },
-    });
+  const contentType = req.headers.get('content-type') || '';
+  let payload: VoiceRequest | null = null;
+  let audioFile: File | null = null;
+  let audioBase64: string | null = null;
+  let mimeType: string | undefined;
+  let timezoneOffset = 0;
+
+  if (contentType.includes('application/octet-stream')) {
+    const bytes = new Uint8Array(await req.arrayBuffer());
+    if (bytes.length === 0) {
+      return new Response(JSON.stringify({ error: 'Empty audio payload' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    const headerMime = req.headers.get('x-audio-mime') || undefined;
+    const headerName = req.headers.get('x-audio-name') || undefined;
+    const headerTimezone = req.headers.get('x-timezone-offset');
+
+    mimeType = headerMime?.trim() || undefined;
+    if (headerTimezone && headerTimezone.trim().length > 0) {
+      const parsedOffset = Number(headerTimezone);
+      if (Number.isFinite(parsedOffset)) {
+        timezoneOffset = parsedOffset;
+      }
+    }
+
+    const resolvedMime = resolveMimeType(mimeType, undefined, headerName);
+    const ext = resolveExtension(resolvedMime, headerName);
+    const fileName = headerName && headerName.includes('.') ? headerName : `audio.${ext}`;
+    audioFile = new File([bytes], fileName, { type: resolvedMime });
+  } else if (contentType.includes('multipart/form-data')) {
+    const formData = await req.formData();
+    const fileField = formData.get('file');
+
+    if (fileField instanceof File) {
+      audioFile = fileField;
+    } else if (typeof fileField === 'string') {
+      audioBase64 = fileField;
+    }
+
+    const mimeField = formData.get('mimeType');
+    if (typeof mimeField === 'string' && mimeField.trim().length > 0) {
+      mimeType = mimeField.trim();
+    }
+
+    const timezoneField = formData.get('timezoneOffset');
+    if (typeof timezoneField === 'string' && timezoneField.trim().length > 0) {
+      const parsedOffset = Number(timezoneField);
+      if (Number.isFinite(parsedOffset)) {
+        timezoneOffset = parsedOffset;
+      }
+    }
+  } else {
+    try {
+      payload = await req.json();
+    } catch {
+      return new Response(JSON.stringify({ error: 'Invalid JSON' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    audioBase64 = payload.audio?.trim() || null;
+    mimeType = payload.mimeType;
+    timezoneOffset = payload.timezoneOffset ?? 0;
   }
 
-  if (!payload.audio || payload.audio.trim().length === 0) {
+  if (!audioFile && (!audioBase64 || audioBase64.length === 0)) {
     return new Response(JSON.stringify({ error: 'Missing audio data' }), {
       status: 400,
       headers: { 'Content-Type': 'application/json' },
@@ -336,8 +477,14 @@ Deno.serve(async (req) => {
 
   try {
     // Step 1: Transcribe audio with Whisper
-    const mimeType = payload.mimeType || 'audio/wav';
-    const transcript = await transcribeAudio(payload.audio, mimeType, openaiKey);
+    const resolvedMimeType = resolveMimeType(mimeType, audioFile?.type, audioFile?.name);
+
+    const audioInput = audioFile ?? audioBase64;
+    if (!audioInput) {
+      throw new Error('No audio input provided');
+    }
+
+    const transcript = await transcribeAudio(audioInput, resolvedMimeType, openaiKey);
 
     if (!transcript || transcript.trim().length === 0) {
       return new Response(JSON.stringify({ error: 'Could not transcribe audio. Please speak clearly and try again.' }), {
@@ -351,13 +498,15 @@ Deno.serve(async (req) => {
 
     if (intent.isReminderRequest) {
       // Step 3a: Parse transcript into reminder structure(s)
-      const parsedData = await parseReminderFromTranscript(transcript, openaiKey, payload.timezoneOffset || 0);
+      const parsedData = await parseReminderFromTranscript(transcript, openaiKey, timezoneOffset);
 
-      return new Response(JSON.stringify({
+      const result = {
         type: 'reminder',
         transcript,
         reminders: parsedData.reminders || [parsedData], // Support both array and single object format
-      }), {
+      };
+
+      return new Response(JSON.stringify(result), {
         status: 200,
         headers: {
           'Content-Type': 'application/json',
@@ -368,11 +517,13 @@ Deno.serve(async (req) => {
       // Step 3b: Generate conversational response
       const response = await generateConversationalResponse(transcript, openaiKey);
 
-      return new Response(JSON.stringify({
+      const result = {
         type: 'conversation',
         transcript,
         response,
-      }), {
+      };
+
+      return new Response(JSON.stringify(result), {
         status: 200,
         headers: {
           'Content-Type': 'application/json',
@@ -382,7 +533,10 @@ Deno.serve(async (req) => {
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
-    return new Response(JSON.stringify({ error: message }), {
+    return new Response(JSON.stringify({
+      error: message,
+      errorType: error?.constructor?.name || 'Unknown',
+    }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     });

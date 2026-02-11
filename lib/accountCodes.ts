@@ -41,7 +41,6 @@ export async function generateAccountCode(): Promise<string | null> {
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
-    console.error('No user logged in');
     return null;
   }
 
@@ -75,7 +74,6 @@ export async function generateAccountCode(): Promise<string | null> {
     }
 
     if (!isUnique) {
-      console.error('Failed to generate unique code after maximum attempts');
       return null;
     }
 
@@ -93,13 +91,11 @@ export async function generateAccountCode(): Promise<string | null> {
       });
 
     if (error) {
-      console.error('Error inserting account code:', error);
       return null;
     }
 
     return code;
-  } catch (error) {
-    console.error('Error generating account code:', error);
+  } catch {
     return null;
   }
 }
@@ -130,13 +126,11 @@ export async function getActiveAccountCode(): Promise<AccountCode | null> {
         // No code found
         return null;
       }
-      console.error('Error fetching active account code:', error);
       return null;
     }
 
     return data;
-  } catch (error) {
-    console.error('Error getting active account code:', error);
+  } catch {
     return null;
   }
 }
@@ -161,12 +155,10 @@ export async function validateAndSyncFromCode(code: string): Promise<boolean> {
     });
 
     if (error) {
-      console.error('Error validating account code:', error);
       return false;
     }
 
     if (data?.error) {
-      console.error('Code validation failed:', data.error);
       return false;
     }
 
@@ -178,8 +170,7 @@ export async function validateAndSyncFromCode(code: string): Promise<boolean> {
     }
 
     return false;
-  } catch (error) {
-    console.error('Error in validateAndSyncFromCode:', error);
+  } catch {
     return false;
   }
 }
@@ -203,13 +194,11 @@ export async function getDeviceSyncHistory(): Promise<DeviceSyncRecord[]> {
       .order('synced_at', { ascending: false });
 
     if (error) {
-      console.error('Error fetching device sync history:', error);
       return [];
     }
 
     return data || [];
-  } catch (error) {
-    console.error('Error getting device sync history:', error);
+  } catch {
     return [];
   }
 }
@@ -234,13 +223,11 @@ export async function removeDevice(deviceId: string): Promise<boolean> {
       .eq('device_id', deviceId);
 
     if (error) {
-      console.error('Error removing device:', error);
       return false;
     }
 
     return true;
-  } catch (error) {
-    console.error('Error in removeDevice:', error);
+  } catch {
     return false;
   }
 }

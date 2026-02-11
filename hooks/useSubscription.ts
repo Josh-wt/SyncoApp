@@ -26,8 +26,7 @@ export function useSubscription() {
         // Initialize RevenueCat SDK for purchases (client-side)
         await initializeRevenueCat(user.id);
       }
-    } catch (error) {
-      console.error('Error initializing RevenueCat:', error);
+    } catch {
     }
   };
 
@@ -39,7 +38,6 @@ export function useSubscription() {
       });
 
       if (error) {
-        console.error('Error checking subscription:', error);
         setIsProUser(false);
         setEntitlements([]);
         return;
@@ -50,8 +48,7 @@ export function useSubscription() {
         setEntitlements(data.entitlements || []);
         setExpiresDate(data.expiresDate);
       }
-    } catch (error) {
-      console.error('Error loading subscription status:', error);
+    } catch {
       setIsProUser(false);
       setEntitlements([]);
     } finally {

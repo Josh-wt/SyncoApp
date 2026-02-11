@@ -50,8 +50,7 @@ export default function AccountCodeInput({ onSyncSuccess }: AccountCodeInputProp
           'The code you entered is invalid or has expired. Please check and try again.'
         );
       }
-    } catch (error) {
-      console.error('Error validating code:', error);
+    } catch {
       Alert.alert('Error', 'An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);

@@ -60,7 +60,6 @@ Deno.serve(async (req) => {
     );
 
     if (!response.ok) {
-      console.error('RevenueCat API error:', response.status);
       // If user not found in RevenueCat, they're free tier
       if (response.status === 404) {
         return new Response(
@@ -103,8 +102,7 @@ Deno.serve(async (req) => {
         headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
       }
     );
-  } catch (error) {
-    console.error('Error checking subscription:', error);
+  } catch {
     return new Response(
       JSON.stringify({ error: 'Internal server error' }),
       { status: 500, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }

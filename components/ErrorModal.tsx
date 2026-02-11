@@ -18,6 +18,9 @@ interface ErrorModalProps {
   buttonText?: string;
 }
 
+const OPEN_DURATION = 170;
+const CLOSE_DURATION = 180;
+
 export default function ErrorModal({
   visible,
   onClose,
@@ -38,13 +41,13 @@ export default function ErrorModal({
       const openAnim = Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 1,
-          duration: 200,
+          duration: OPEN_DURATION,
           useNativeDriver: true,
         }),
         Animated.spring(scaleAnim, {
           toValue: 1,
-          tension: 300,
-          friction: 20,
+          tension: 320,
+          friction: 24,
           useNativeDriver: true,
         }),
       ]);
@@ -56,12 +59,12 @@ export default function ErrorModal({
       const closeAnim = Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 0,
-          duration: 250,
+          duration: CLOSE_DURATION,
           useNativeDriver: true,
         }),
         Animated.timing(scaleAnim, {
           toValue: 0.95,
-          duration: 250,
+          duration: CLOSE_DURATION,
           useNativeDriver: true,
         }),
       ]);

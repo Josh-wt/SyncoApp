@@ -35,13 +35,13 @@ export default function PaywallModal({ visible, onClose, onPurchaseSuccess }: Pa
       Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 1,
-          duration: 200,
+          duration: 170,
           useNativeDriver: true,
         }),
         Animated.spring(slideAnim, {
           toValue: 0,
-          tension: 200,
-          friction: 24,
+          tension: 240,
+          friction: 26,
           useNativeDriver: true,
         }),
       ]).start();
@@ -49,11 +49,18 @@ export default function PaywallModal({ visible, onClose, onPurchaseSuccess }: Pa
     }
 
     if (isMounted) {
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }).start(({ finished }) => {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 170,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: Dimensions.get('window').height,
+          duration: 190,
+          useNativeDriver: true,
+        }),
+      ]).start(({ finished }) => {
         if (finished) {
           setIsMounted(false);
         }
@@ -73,8 +80,7 @@ export default function PaywallModal({ visible, onClose, onPurchaseSuccess }: Pa
           setSelectedPackage(offering.availablePackages[0]);
         }
       }
-    } catch (error) {
-      console.error('Error loading offerings:', error);
+    } catch {
     } finally {
       setLoading(false);
     }
@@ -93,8 +99,7 @@ export default function PaywallModal({ visible, onClose, onPurchaseSuccess }: Pa
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         onPurchaseSuccess();
       }
-    } catch (error) {
-      console.error('Purchase error:', error);
+    } catch {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setPurchasing(false);
@@ -109,8 +114,7 @@ export default function PaywallModal({ visible, onClose, onPurchaseSuccess }: Pa
       if (success) {
         onPurchaseSuccess();
       }
-    } catch (error) {
-      console.error('Restore error:', error);
+    } catch {
     } finally {
       setPurchasing(false);
     }

@@ -3,7 +3,14 @@ import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { supabase } from './supabase';
-import { getAllFutureReminders } from './reminders';
+import { getAllFutureReminders, snoozeReminder as snoozeReminderInDb } from './reminders';
+import type { ReminderAction, SnoozeMode } from './types';
+import { getUserPreferences } from './userPreferences';
+import { getReminderActions } from './reminderActions';
+import {
+  createDynamicNotificationCategory,
+  handleDynamicNotificationAction,
+} from './notificationCategories';
 
 // Concurrency guard for sync
 let syncInProgress = false;
@@ -26,6 +33,8 @@ type ReminderData = {
   body?: string;
   originalTime?: string;
   reminderUpdatedAt?: string;
+  defaultSnoozeMinutes?: number;
+  testNotification?: boolean;
 };
 
 type ReminderScheduleInput = {
@@ -35,6 +44,10 @@ type ReminderScheduleInput = {
   triggerAt: Date;
   originalTime?: string;
   reminderUpdatedAt?: string;
+  actions?: ReminderAction[];
+  defaultSnoozeMinutes?: number;
+  snoozeMode?: SnoozeMode;
+  snoozePresetValues?: number[];
 };
 
 type NotificationScheduleRecord = {
@@ -48,30 +61,23 @@ type NotificationScheduleRecord = {
   snoozed_until: string | null;
 };
 
+function hasSupportedCategoryIdentifier(value: string | null | undefined): boolean {
+  if (!value) return false;
+  // Expo docs advise against ":" and "-" in category identifiers.
+  return !value.includes(':') && !value.includes('-');
+}
+
 function getDeviceIdentifier(): string {
   return Device.deviceName || Device.modelName || 'unknown-device';
 }
 
 export async function registerForPushNotifications(): Promise<{ token: string; tokenType: PushTokenType } | null> {
   if (!Device.isDevice) {
-    console.log('Push notifications require a physical device');
-    return null;
-  }
-
-  const { status: existingStatus } = await Notifications.getPermissionsAsync();
-  let finalStatus = existingStatus;
-
-  if (existingStatus !== 'granted') {
-    const { status } = await Notifications.requestPermissionsAsync();
-    finalStatus = status;
-  }
-
-  if (finalStatus !== 'granted') {
-    console.log('Push notification permissions not granted');
     return null;
   }
 
   if (Platform.OS === 'android') {
+    // On Android 13+, create the channel before requesting notification permissions.
     await Notifications.setNotificationChannelAsync('reminders', {
       name: 'Reminders',
       importance: Notifications.AndroidImportance.MAX,
@@ -79,6 +85,28 @@ export async function registerForPushNotifications(): Promise<{ token: string; t
       lightColor: '#2F00FF',
       sound: 'default',
     });
+  }
+
+  const { status: existingStatus } = await Notifications.getPermissionsAsync();
+  let finalStatus = existingStatus;
+
+  if (existingStatus !== 'granted') {
+    const { status } = await Notifications.requestPermissionsAsync(
+      Platform.OS === 'ios'
+        ? {
+            ios: {
+              allowAlert: true,
+              allowBadge: true,
+              allowSound: true,
+            },
+          }
+        : undefined
+    );
+    finalStatus = status;
+  }
+
+  if (finalStatus !== 'granted') {
+    return null;
   }
 
   try {
@@ -90,7 +118,6 @@ export async function registerForPushNotifications(): Promise<{ token: string; t
     const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
 
     if (!projectId) {
-      console.log('No project ID found for push notifications');
       return null;
     }
 
@@ -100,7 +127,6 @@ export async function registerForPushNotifications(): Promise<{ token: string; t
 
     return { token: tokenData.data, tokenType: 'expo' };
   } catch (error) {
-    console.error('Error getting push token:', error);
     return null;
   }
 }
@@ -113,7 +139,6 @@ export async function savePushToken(token: string, tokenType: PushTokenType): Pr
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
-    console.log('User not authenticated, cannot save push token');
     return;
   }
 
@@ -137,7 +162,6 @@ export async function savePushToken(token: string, tokenType: PushTokenType): Pr
     );
 
   if (error) {
-    console.error('Error saving push token:', error);
     throw error;
   }
 }
@@ -149,7 +173,7 @@ export async function removePushToken(token: string): Promise<void> {
     .eq('token', token);
 
   if (error) {
-    console.error('Error removing push token:', error);
+    // Error removing push token
   }
 }
 
@@ -185,12 +209,38 @@ export async function getNotificationPermissionStatus(): Promise<Notifications.P
 }
 
 export async function scheduleReminder(reminder: ReminderScheduleInput): Promise<string> {
-  const { reminderId, title, body, triggerAt, originalTime, reminderUpdatedAt } = reminder;
+  const {
+    reminderId,
+    title,
+    body,
+    triggerAt,
+    originalTime,
+    reminderUpdatedAt,
+    actions,
+    defaultSnoozeMinutes,
+    snoozeMode,
+    snoozePresetValues,
+  } = reminder;
+
+  const snoozeMinutes = Math.max(1, Math.floor(defaultSnoozeMinutes ?? 15));
+  const reminderActions = actions ?? await getReminderActions(reminderId).catch(() => []);
+
+  let categoryIdentifier: string | undefined;
+  try {
+    categoryIdentifier = await createDynamicNotificationCategory(reminderId, reminderActions, {
+      defaultSnoozeMinutes: snoozeMinutes,
+      snoozeMode,
+      snoozePresetValues,
+    });
+  } catch {
+    categoryIdentifier = undefined;
+  }
 
   const content: Notifications.NotificationContentInput = {
     title,
     body,
     sound: 'default',
+    ...(categoryIdentifier ? { categoryIdentifier } : {}),
     ...(Platform.OS === 'android' && { channelId: 'reminders' }), // Required for Android
     data: {
       reminderId,
@@ -198,30 +248,9 @@ export async function scheduleReminder(reminder: ReminderScheduleInput): Promise
       body,
       originalTime: originalTime ?? triggerAt.toISOString(),
       reminderUpdatedAt,
+      defaultSnoozeMinutes: snoozeMinutes,
     },
   };
-
-  // Verify permissions before scheduling
-  const { status: permissionStatus } = await Notifications.getPermissionsAsync();
-  console.log('📱 [NOTIF] Notification permission status:', permissionStatus);
-
-  if (permissionStatus !== 'granted') {
-    console.warn('⚠️ [NOTIF] Notification permissions not granted! Status:', permissionStatus);
-  }
-
-  const now = new Date();
-  const timeUntilNotification = triggerAt.getTime() - now.getTime();
-  const minutesUntil = Math.round(timeUntilNotification / 1000 / 60);
-
-  console.log('📱 [NOTIF] Scheduling notification');
-  console.log('📱 [NOTIF] Trigger date:', triggerAt.toISOString());
-  console.log('📱 [NOTIF] Current time:', now.toISOString());
-  console.log('📱 [NOTIF] Time until notification:', minutesUntil, 'minutes');
-  console.log('📱 [NOTIF] Notification content:', JSON.stringify({
-    title: content.title,
-    channelId: Platform.OS === 'android' ? 'reminders' : undefined,
-    hasData: !!content.data,
-  }, null, 2));
 
   const notificationId = await Notifications.scheduleNotificationAsync({
     content,
@@ -231,8 +260,6 @@ export async function scheduleReminder(reminder: ReminderScheduleInput): Promise
     },
   });
 
-  console.log('✅ [NOTIF] Notification scheduled with ID:', notificationId);
-  console.log('📱 [NOTIF] Will arrive in', minutesUntil, 'minutes');
   return notificationId;
 }
 
@@ -248,8 +275,6 @@ export async function cancelAllScheduledNotifications(): Promise<void> {
 
 // TEST FUNCTION: Send a test notification
 export async function sendTestNotification(): Promise<void> {
-  console.log('🧪 [TEST] Creating test notification...');
-
   try {
     // Schedule test notification in 5 seconds
     await Notifications.scheduleNotificationAsync({
@@ -265,12 +290,7 @@ export async function sendTestNotification(): Promise<void> {
         seconds: 5,
       },
     });
-
-    console.log('✅ [TEST] Test notification scheduled! Check in 5 seconds.');
-    console.log('📱 [TEST] Platform:', Platform.OS);
-    console.log('📱 [TEST] Channel ID:', Platform.OS === 'android' ? 'reminders' : 'not needed (iOS)');
-  } catch (error) {
-    console.error('❌ [TEST] Error creating test notification:', error);
+  } catch {
   }
 }
 
@@ -296,7 +316,6 @@ async function fetchNotificationSchedules(userId: string, deviceId: string): Pro
     .eq('device_id', deviceId);
 
   if (error) {
-    console.error('Failed to fetch notification schedules:', error);
     return [];
   }
 
@@ -332,14 +351,14 @@ async function upsertNotificationSchedule(params: {
     );
 
   if (error) {
-    console.error('Failed to upsert notification schedule:', error);
+    return;
   }
 }
 
 async function deleteNotificationSchedule(id: string): Promise<void> {
   const { error } = await supabase.from('notification_schedules').delete().eq('id', id);
   if (error) {
-    console.error('Failed to delete notification schedule:', error);
+    return;
   }
 }
 
@@ -353,43 +372,77 @@ export async function syncLocalReminderSchedules(): Promise<void> {
   }
 }
 
+export async function syncReminderNotifications(): Promise<void> {
+  await syncLocalReminderSchedules();
+  await sendResyncPush();
+}
+
 async function _doSyncLocalReminderSchedules(): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
 
   const deviceId = getDeviceIdentifier();
   const now = Date.now();
+  const preferences = await getUserPreferences();
+  const defaultSnoozeMinutes = Math.max(1, Math.floor(preferences?.default_snooze_minutes ?? 15));
+  const allScheduledNow = await Notifications.getAllScheduledNotificationsAsync();
+  const scheduledById = new Map(allScheduledNow.map((request) => [request.identifier, request]));
 
   const reminders = await getAllFutureReminders();
   const existing = await fetchNotificationSchedules(user.id, deviceId);
   const existingByReminder = new Map(existing.map((record) => [record.reminder_id, record]));
   const keepIds = new Set<string>();
 
+  const reminderIds = reminders.map((reminder) => reminder.id);
+  const actionsByReminder = new Map<string, ReminderAction[]>();
+  if (reminderIds.length > 0) {
+    const { data: allActions } = await supabase
+      .from('reminder_actions')
+      .select('*')
+      .in('reminder_id', reminderIds)
+      .order('created_at', { ascending: true });
+
+    for (const action of (allActions ?? []) as ReminderAction[]) {
+      const current = actionsByReminder.get(action.reminder_id) ?? [];
+      current.push(action);
+      actionsByReminder.set(action.reminder_id, current);
+    }
+  }
+
   for (const reminder of reminders) {
-    const notifyAt = new Date(new Date(reminder.scheduled_time).getTime() - reminder.notify_before_minutes * 60 * 1000);
-    if (Number.isNaN(notifyAt.getTime())) {
+    const scheduledAtMs = new Date(reminder.scheduled_time).getTime();
+    if (Number.isNaN(scheduledAtMs)) {
       continue;
     }
-    if (notifyAt.getTime() <= now) {
+    if (scheduledAtMs <= now) {
       continue;
     }
 
+    // If notify-before has already passed (common after snooze), notify at due time.
+    const preferredNotifyAtMs = scheduledAtMs - reminder.notify_before_minutes * 60 * 1000;
+    const notifyAtMs = preferredNotifyAtMs > now ? preferredNotifyAtMs : scheduledAtMs;
+    const notifyAt = new Date(notifyAtMs);
+
     const existingRecord = existingByReminder.get(reminder.id);
     if (existingRecord) {
+      const existingNotification = scheduledById.get(existingRecord.notification_id);
+      const hasCategoryIdentifier = hasSupportedCategoryIdentifier(
+        existingNotification?.content.categoryIdentifier
+      );
       const existingTime = new Date(existingRecord.scheduled_for).getTime();
       const snoozedUntil = existingRecord.snoozed_until ? new Date(existingRecord.snoozed_until).getTime() : null;
       const reminderUpdatedAt = reminder.updated_at;
       const recordUpdatedAt = existingRecord.reminder_updated_at;
 
-      if (snoozedUntil && snoozedUntil > now) {
+      if (snoozedUntil && snoozedUntil > now && hasCategoryIdentifier) {
         keepIds.add(existingRecord.id);
         continue;
       }
 
       const unchanged = recordUpdatedAt && reminderUpdatedAt === recordUpdatedAt;
-      const closeToTarget = Math.abs(existingTime - notifyAt.getTime()) < 60 * 1000;
+      const closeToTarget = Math.abs(existingTime - notifyAtMs) < 60 * 1000;
 
-      if (unchanged && closeToTarget && existingTime > now) {
+      if (unchanged && closeToTarget && existingTime > now && hasCategoryIdentifier) {
         keepIds.add(existingRecord.id);
         continue;
       }
@@ -405,6 +458,10 @@ async function _doSyncLocalReminderSchedules(): Promise<void> {
       triggerAt: notifyAt,
       originalTime: reminder.scheduled_time,
       reminderUpdatedAt: reminder.updated_at,
+      actions: actionsByReminder.get(reminder.id) ?? [],
+      defaultSnoozeMinutes,
+      snoozeMode: preferences?.snooze_mode ?? 'text_input',
+      snoozePresetValues: preferences?.snooze_preset_values ?? [5, 10, 15, 30],
     });
 
     await upsertNotificationSchedule({
@@ -453,33 +510,103 @@ export async function sendResyncPush(): Promise<void> {
         deviceId: getDeviceIdentifier(),
       },
     });
-  } catch (error) {
-    console.error('Failed to send resync push:', error);
+  } catch {
   }
+}
+
+function normalizeSnoozeMinutes(minutes: number | undefined): number {
+  if (typeof minutes !== 'number' || Number.isNaN(minutes)) {
+    return 15;
+  }
+  return Math.max(1, Math.floor(minutes));
+}
+
+async function applySnooze(
+  reminderId: string,
+  minutes: number,
+  originalData: ReminderData
+): Promise<void> {
+  const normalizedMinutes = normalizeSnoozeMinutes(minutes);
+
+  try {
+    await snoozeReminderInDb(reminderId, normalizedMinutes);
+    await syncReminderNotifications();
+    return;
+  } catch {
+    // Fallback: keep user-facing behavior functional even if DB update fails.
+  }
+
+  await rescheduleSnooze(reminderId, normalizedMinutes, originalData);
+}
+
+async function rescheduleSnooze(
+  reminderId: string,
+  minutes: number,
+  originalData: ReminderData
+): Promise<void> {
+  const normalizedMinutes = normalizeSnoozeMinutes(minutes);
+  const triggerAt = new Date(Date.now() + normalizedMinutes * 60 * 1000);
+
+  const notificationId = await scheduleReminder({
+    reminderId,
+    title: originalData.title ?? 'Reminder',
+    body: originalData.body ?? 'Reminder is due!',
+    triggerAt,
+    originalTime: originalData.originalTime,
+    reminderUpdatedAt: originalData.reminderUpdatedAt,
+    defaultSnoozeMinutes: normalizedMinutes,
+  });
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return;
+  }
+
+  await upsertNotificationSchedule({
+    userId: user.id,
+    reminderId,
+    deviceId: getDeviceIdentifier(),
+    notificationId,
+    scheduledFor: triggerAt.toISOString(),
+    reminderUpdatedAt: originalData.reminderUpdatedAt ?? null,
+    snoozedUntil: triggerAt.toISOString(),
+  });
 }
 
 export async function handleNotificationResponse(
   response: Notifications.NotificationResponse,
   onReminderTap?: (reminderId: string) => void
 ): Promise<void> {
-  console.log('Notification response:', {
-    actionIdentifier: response.actionIdentifier,
-    userText: response.userText,
-    data: response.notification.request.content.data,
-  });
-
   const data = response.notification.request.content.data as ReminderData | undefined;
 
   // Skip test notifications
   if (data && 'testNotification' in data && data.testNotification) {
-    console.log('✅ Test notification action button worked!');
     return;
   }
 
   const reminderId = data?.reminderId;
 
   if (!reminderId || !isUuid(reminderId)) {
-    console.log('Invalid reminderId in notification data:', reminderId);
+    return;
+  }
+
+  // Tapping the notification body should always deep-link to Progress and open this reminder.
+  if (response.actionIdentifier === Notifications.DEFAULT_ACTION_IDENTIFIER) {
+    onReminderTap?.(reminderId);
+    return;
+  }
+
+  const handled = await handleDynamicNotificationAction(
+    response,
+    () => {
+      void syncReminderNotifications().catch(() => {});
+    },
+    (id, minutes) => {
+      void applySnooze(id, minutes, data ?? {}).catch(() => {});
+    }
+  );
+
+  if (handled) {
     return;
   }
 

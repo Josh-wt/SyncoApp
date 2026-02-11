@@ -1,10 +1,11 @@
 import './global.css';
 import { useEffect, useRef, useState } from 'react';
-import { AppState, View, Platform } from 'react-native';
+import { AppState, View, Linking } from 'react-native';
 import { useFonts } from 'expo-font';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { supabase } from './lib/supabase';
+import { completeAuthFromUrl } from './lib/auth';
 import {
   handleNotificationResponse,
   initializeNotifications,
@@ -35,68 +36,60 @@ export default function App() {
   const [notificationOpenRequest, setNotificationOpenRequest] = useState<{ id: string; at: number } | null>(null);
   const notificationResponseListener = useRef<Notifications.EventSubscription | null>(null);
   const notificationReceivedListener = useRef<Notifications.EventSubscription | null>(null);
+  const sessionUserId = session?.user?.id ?? null;
 
-  // Preload native modules to prevent reload on first use
+  // Preload native modules to avoid runtime cold-load reload behavior on first use.
   useEffect(() => {
-    console.log('📦 [App] Preloading modules, Device.isDevice:', Device.isDevice);
-
-    // Only preload expo-audio on physical devices (not simulator)
-    // Simulator doesn't have microphone hardware and will crash
     if (Device.isDevice) {
-      console.log('📦 [App] Preloading expo-audio on physical device');
-      import('expo-audio')
-        .then(() => console.log('✅ [App] expo-audio preloaded successfully'))
-        .catch((err) => {
-          console.error('🔴 [App] Failed to preload expo-audio:', err);
-        });
-    } else {
-      console.log('⚠️ [App] Skipping expo-audio preload (simulator detected)');
+      import('expo-audio').catch(() => {});
     }
-
-    console.log('📦 [App] Preloading expo-file-system');
-    import('expo-file-system')
-      .then(() => console.log('✅ [App] expo-file-system preloaded'))
-      .catch((err) => console.error('🔴 [App] Failed to preload expo-file-system:', err));
+    import('expo-file-system').catch(() => {});
   }, []);
 
   // Auth session effect
   useEffect(() => {
     let isMounted = true;
+    const handleDeepLink = async (url: string | null | undefined) => {
+      try {
+        await completeAuthFromUrl(url);
+      } catch {
+        // Ignore deep-link auth completion errors here; Auth screen will surface sign-in errors.
+      }
+    };
 
-    console.log('🔐 [App] Initializing auth session');
-    supabase.auth.getSession().then(({ data }: { data: { session: Session } }) => {
+    const bootstrapAuth = async () => {
+      const initialUrl = await Linking.getInitialURL();
+      await handleDeepLink(initialUrl);
+
+      const { data } = await supabase.auth.getSession();
       if (isMounted) {
-        console.log('🔐 [App] Initial session loaded:', {
-          hasSession: !!data.session,
-          userId: data.session?.user?.id
-        });
-        setSession(data.session ?? null);
+        setSession((data.session as Session) ?? null);
         setIsCheckingSession(false);
       }
-    });
+    };
+
+    void bootstrapAuth();
 
     const { data } = supabase.auth.onAuthStateChange((_event: string, nextSession: Session) => {
       if (isMounted) {
-        console.log('🔐 [App] Auth state changed:', {
-          event: _event,
-          hasSession: !!nextSession,
-          userId: nextSession?.user?.id,
-          userEmail: nextSession?.user?.email
-        });
         setSession(nextSession);
       }
     });
 
+    const deepLinkSubscription = Linking.addEventListener('url', ({ url }) => {
+      void handleDeepLink(url);
+    });
+
     return () => {
-      console.log('🔐 [App] Auth cleanup');
       isMounted = false;
+      deepLinkSubscription.remove();
       data.subscription.unsubscribe();
     };
   }, []);
 
   // Initialize push notifications when user is authenticated
   useEffect(() => {
-    if (!session) return;
+    if (!sessionUserId) return;
 
     const initNotifications = async () => {
       try {
@@ -104,13 +97,10 @@ export default function App() {
 
         await syncLocalReminderSchedules();
 
-        notificationReceivedListener.current = setupNotificationReceivedHandler((notification) => {
-          console.log('Foreground notification received:', notification.request.content.data);
-        });
+        notificationReceivedListener.current = setupNotificationReceivedHandler(() => {});
 
         notificationResponseListener.current = setupNotificationResponseHandler(
           (reminderId) => {
-            console.log('Notification tapped for reminder:', reminderId);
             setNotificationOpenRequest({ id: reminderId, at: Date.now() });
           },
         );
@@ -118,12 +108,12 @@ export default function App() {
         const lastResponse = await Notifications.getLastNotificationResponseAsync();
         if (lastResponse) {
           await handleNotificationResponse(lastResponse, (reminderId) => {
-            console.log('Notification opened on launch for reminder:', reminderId);
             setNotificationOpenRequest({ id: reminderId, at: Date.now() });
           });
+          await Notifications.clearLastNotificationResponseAsync().catch(() => {});
         }
       } catch (error) {
-        console.error('Failed to initialize notifications:', error);
+        // Notification initialization failed silently
       }
     };
 
@@ -144,14 +134,11 @@ export default function App() {
       }
       appStateSubscription.remove();
     };
-  }, [session]);
+  }, [sessionUserId]);
 
   if (!fontsLoaded || isCheckingSession) {
-    console.log('⏳ [App] Loading... fontsLoaded:', fontsLoaded, 'isCheckingSession:', isCheckingSession);
     return <View />;
   }
-
-  console.log('🎨 [App] Rendering screen, hasSession:', !!session, 'showAuth:', showAuth);
 
   return (
     <ThemeProvider>

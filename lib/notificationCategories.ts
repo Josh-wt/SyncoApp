@@ -8,7 +8,7 @@
 
 import * as Notifications from 'expo-notifications';
 import { Linking, Platform } from 'react-native';
-import { ReminderAction, ReminderActionType } from './types';
+import { ReminderAction, ReminderActionType, SnoozeMode } from './types';
 import { updateReminderStatus } from './reminders';
 import { getReminderActions } from './reminderActions';
 
@@ -22,17 +22,64 @@ const PREFIX_EMAIL = 'email';
 const PREFIX_NOTE = 'note';
 const PREFIX_SUBTASKS = 'subtasks';
 
+function sanitizeIdentifierPart(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9_]/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+function hashString(value: string): string {
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
+  }
+  return hash.toString(36);
+}
+
 /**
- * Generates a unique category identifier based on action types combination
- * Example: "actions_call_link" or "actions_email_location"
+ * Generates a unique category identifier for a specific reminder.
+ * Categories must be reminder-specific so action identifiers and snooze behavior
+ * don't drift when multiple reminders share the same action types.
  */
-function generateCategoryId(actionTypes: ReminderActionType[]): string {
-  if (actionTypes.length === 0) {
-    return 'reminder_default';
+function generateCategoryId(
+  reminderId: string,
+  actionTypes: ReminderActionType[],
+  snoozeMode: SnoozeMode
+): string {
+  const sortedTypes = [...actionTypes].sort();
+  const actionSignature = sortedTypes.length > 0 ? sortedTypes.join('_') : 'default';
+  const categoryId = [
+    'reminder',
+    sanitizeIdentifierPart(reminderId) || 'unknown',
+    sanitizeIdentifierPart(snoozeMode) || 'snooze',
+    sanitizeIdentifierPart(actionSignature) || 'default',
+  ].join('_');
+
+  // Keep category identifiers within a safe length for native APIs.
+  if (categoryId.length <= 120) {
+    return categoryId;
   }
 
-  const sortedTypes = [...actionTypes].sort();
-  return `actions_${sortedTypes.join('_')}`;
+  const digest = hashString(categoryId);
+  return `${categoryId.slice(0, 100)}_${digest}`;
+}
+
+function parseMinutesFromUserText(value: string | undefined): number | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  const match = trimmed.match(/-?\d+/);
+  if (!match) return null;
+
+  const parsed = Number.parseInt(match[0], 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+
+  return Math.floor(parsed);
 }
 
 /**
@@ -42,12 +89,12 @@ function createNotificationActionButton(
   action: ReminderAction,
   index: number
 ): Notifications.NotificationAction {
-  const configs: Record<ReminderActionType, {
+  const configs: Partial<Record<ReminderActionType, {
     prefix: string;
     title: string;
     emoji: string;
     opensApp: boolean;
-  }> = {
+  }>> = {
     call: {
       prefix: PREFIX_CALL,
       title: 'Call',
@@ -116,11 +163,14 @@ function createNotificationActionButton(
 export async function createDynamicNotificationCategory(
   reminderId: string,
   actions: ReminderAction[],
-  snoozeMinutes: number = 15
+  options?: {
+    defaultSnoozeMinutes?: number;
+    snoozeMode?: SnoozeMode;
+    snoozePresetValues?: number[];
+  }
 ): Promise<string> {
-  console.log('🔔 [CATEGORY] Creating notification category for reminder:', reminderId);
-  console.log('🔔 [CATEGORY] Received actions:', JSON.stringify(actions, null, 2));
-  console.log('🔔 [CATEGORY] Snooze minutes:', snoozeMinutes);
+  const snoozeMode = options?.snoozeMode ?? 'text_input';
+  const defaultSnoozeMinutes = Math.max(1, Math.floor(options?.defaultSnoozeMinutes ?? 15));
 
   // Filter to only actionable types that can be executed from notification
   const actionableTypes: ReminderActionType[] = ['call', 'link', 'location', 'email'];
@@ -128,14 +178,9 @@ export async function createDynamicNotificationCategory(
     actionableTypes.includes(a.action_type)
   );
 
-  console.log('🔔 [CATEGORY] Actionable actions (filtered):', actionableActions.length);
-  console.log('🔔 [CATEGORY] Actionable actions:', JSON.stringify(actionableActions, null, 2));
-
   // Generate category ID based on action types
   const actionTypes = actionableActions.map(a => a.action_type);
-  const categoryId = generateCategoryId(actionTypes);
-
-  console.log('🔔 [CATEGORY] Generated category ID:', categoryId);
+  const categoryId = generateCategoryId(reminderId, actionTypes, snoozeMode);
 
   const notificationActions: Notifications.NotificationAction[] = [];
 
@@ -145,28 +190,37 @@ export async function createDynamicNotificationCategory(
   });
 
   // Add Snooze button
-  const snoozeLabel = snoozeMinutes >= 60
-    ? `⏰ Snooze ${snoozeMinutes / 60}h`
-    : `⏰ Snooze ${snoozeMinutes}m`;
+  if (snoozeMode === 'text_input') {
+    notificationActions.push({
+      identifier: `${PREFIX_SNOOZE}_${reminderId}`,
+      buttonTitle: '⏰ Snooze',
+      textInput: {
+        submitButtonTitle: 'Snooze',
+        placeholder: 'Minutes',
+      },
+      options: { opensAppToForeground: true },
+    });
+  } else {
+    const snoozeLabel = defaultSnoozeMinutes >= 60
+      ? `⏰ Snooze ${defaultSnoozeMinutes / 60}h`
+      : `⏰ Snooze ${defaultSnoozeMinutes}m`;
 
-  notificationActions.push({
-    identifier: `${PREFIX_SNOOZE}_${reminderId}`,
-    buttonTitle: snoozeLabel,
-    options: { opensAppToForeground: false },
-  });
+    notificationActions.push({
+      identifier: `${PREFIX_SNOOZE}_${reminderId}`,
+      buttonTitle: snoozeLabel,
+      options: { opensAppToForeground: true },
+    });
+  }
 
   // Add Complete button (always last, destructive style)
   notificationActions.push({
     identifier: `${PREFIX_COMPLETE}_${reminderId}`,
     buttonTitle: '✓ Complete',
     options: {
-      opensAppToForeground: false,
+      opensAppToForeground: true,
       isDestructive: true,
     },
   });
-
-  console.log('🔔 [CATEGORY] Total notification actions:', notificationActions.length);
-  console.log('🔔 [CATEGORY] Actions:', JSON.stringify(notificationActions, null, 2));
 
   // Create/update the category
   try {
@@ -175,18 +229,9 @@ export async function createDynamicNotificationCategory(
       notificationActions,
       {
         allowInCarPlay: true,
-        allowAnnouncement: true,
       }
     );
-    console.log('✅ [CATEGORY] Successfully registered category:', categoryId);
-
-    // Verify it was registered
-    const categories = await Notifications.getNotificationCategoriesAsync();
-    console.log('🔔 [CATEGORY] All registered categories:', categories.length);
-    console.log('🔔 [CATEGORY] Category IDs:', categories.map(c => c.identifier));
-
   } catch (error) {
-    console.error('❌ [CATEGORY] Error registering category:', error);
     throw error;
   }
 
@@ -207,7 +252,6 @@ export async function handleDynamicNotificationAction(
   const reminderId = data?.reminderId;
 
   if (!reminderId) {
-    console.warn('No reminderId in notification data');
     return false;
   }
 
@@ -226,7 +270,13 @@ export async function handleDynamicNotificationAction(
         return true;
 
       case PREFIX_SNOOZE:
-        const snoozeMinutes = data?.defaultSnoozeMinutes || 15;
+        const typedMinutes = parseMinutesFromUserText(response.userText);
+        const rawSnoozeMinutes = data?.defaultSnoozeMinutes;
+        const fallbackMinutes =
+          typeof rawSnoozeMinutes === 'number' && Number.isFinite(rawSnoozeMinutes)
+            ? rawSnoozeMinutes
+            : Number.parseInt(String(rawSnoozeMinutes), 10) || 15;
+        const snoozeMinutes = typedMinutes ?? Math.max(1, Math.floor(fallbackMinutes));
         onSnooze?.(reminderId, snoozeMinutes);
         // Snoozing is handled by the main notification handler
         await Notifications.dismissNotificationAsync(notification.request.identifier);
@@ -310,8 +360,7 @@ export async function handleDynamicNotificationAction(
         // The main handler will handle opening to the specific reminder
         return false;
     }
-  } catch (error) {
-    console.error('Error handling notification action:', error);
+  } catch {
     return false;
   }
 

@@ -335,7 +335,10 @@ export default function TaskConfigSection({ onActionsChange }: TaskConfigSection
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 20,
+    marginBottom: 0,
+    alignSelf: 'center',
+    width: '100%',
+    maxWidth: 560,
   },
   card: {
     borderRadius: 26,

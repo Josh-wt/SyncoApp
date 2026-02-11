@@ -133,7 +133,6 @@ Deno.serve(async (req) => {
       .eq('user_id', user.id);
 
     if (tokensError) {
-      console.error('Error fetching push tokens:', tokensError);
       throw tokensError;
     }
 
@@ -184,8 +183,7 @@ Deno.serve(async (req) => {
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Expo Push API error:', errorText);
+        await response.text();
       }
     }
 
@@ -221,8 +219,7 @@ Deno.serve(async (req) => {
         });
 
         if (!response.ok) {
-          const errorText = await response.text();
-          console.error('FCM Push API error:', errorText);
+          await response.text();
         }
       }
     }
@@ -232,7 +229,6 @@ Deno.serve(async (req) => {
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    console.error('Edge function error:', error);
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
       {

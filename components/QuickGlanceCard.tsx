@@ -112,9 +112,8 @@ export default function QuickGlanceCard({ onGiftPress }: QuickGlanceCardProps) {
             setUserName(capitalized);
           }
         }
-      } catch (error) {
+      } catch {
         // Keep default "Sunshine" if error
-        console.log('Error fetching user name:', error);
       }
     };
 

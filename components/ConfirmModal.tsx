@@ -12,6 +12,8 @@ import { MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
+const OPEN_DURATION = 170;
+const CLOSE_DURATION = 180;
 
 interface ConfirmModalProps {
   visible: boolean;
@@ -49,13 +51,13 @@ export default function ConfirmModal({
       const openAnim = Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 1,
-          duration: 200,
+          duration: OPEN_DURATION,
           useNativeDriver: true,
         }),
         Animated.spring(scaleAnim, {
           toValue: 1,
-          tension: 300,
-          friction: 20,
+          tension: 320,
+          friction: 24,
           useNativeDriver: true,
         }),
       ]);
@@ -67,12 +69,12 @@ export default function ConfirmModal({
       const closeAnim = Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 0,
-          duration: 250,
+          duration: CLOSE_DURATION,
           useNativeDriver: true,
         }),
         Animated.timing(scaleAnim, {
           toValue: 0.95,
-          duration: 250,
+          duration: CLOSE_DURATION,
           useNativeDriver: true,
         }),
       ]);

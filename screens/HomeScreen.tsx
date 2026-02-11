@@ -31,7 +31,7 @@ export default function HomeScreen({ notificationOpenRequest }: HomeScreenProps)
   const [showFirstTimeHint, setShowFirstTimeHint] = useState(false);
   const [currentScreen, setCurrentScreen] = useState<Screen>('home');
 
-  // Animation values for smooth screen transitions
+  // Animation value for home <-> create slide transition
   const slideAnim = useRef(new Animated.Value(0)).current;
 
   // Check if this is the user's first time
@@ -52,13 +52,8 @@ export default function HomeScreen({ notificationOpenRequest }: HomeScreenProps)
 
   useEffect(() => {
     if (!notificationOpenRequest?.id) return;
+    slideAnim.setValue(0);
     setCurrentScreen('notifications');
-    Animated.spring(slideAnim, {
-      toValue: 0,
-      useNativeDriver: true,
-      tension: 65,
-      friction: 10,
-    }).start();
   }, [notificationOpenRequest, slideAnim]);
 
   const handleDismissHint = useCallback(async () => {
@@ -70,16 +65,65 @@ export default function HomeScreen({ notificationOpenRequest }: HomeScreenProps)
     }
   }, []);
 
-  const handleCreateReminder = useCallback((mode: CreationMode) => {
+  const handleCreateReminder = useCallback((_mode: CreationMode) => {
     // Always use manual-create screen (AI is now integrated in manual screen)
     setCurrentScreen('manual-create');
-    Animated.spring(slideAnim, {
+    Animated.timing(slideAnim, {
       toValue: 1,
+      duration: 220,
       useNativeDriver: true,
-      tension: 65,
-      friction: 10,
     }).start();
   }, [slideAnim]);
+
+  const switchScreen = useCallback((nextScreen: Screen) => {
+    if (nextScreen === currentScreen) return;
+
+    if (nextScreen === 'manual-create') {
+      setCurrentScreen('manual-create');
+      Animated.timing(slideAnim, {
+        toValue: 1,
+        duration: 220,
+        useNativeDriver: true,
+      }).start();
+      return;
+    }
+
+    if (currentScreen === 'manual-create' && nextScreen === 'home') {
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 210,
+        useNativeDriver: true,
+      }).start(() => {
+        setCurrentScreen('home');
+      });
+      return;
+    }
+
+    slideAnim.setValue(0);
+    setCurrentScreen(nextScreen);
+  }, [currentScreen, slideAnim]);
+
+  const handleBackToHome = useCallback(() => {
+    switchScreen('home');
+  }, [switchScreen]);
+
+  const handleTabPress = useCallback((tab: TabName) => {
+    if (tab === 'dashboard') {
+      switchScreen('home');
+      return;
+    }
+    if (tab === 'notifications') {
+      switchScreen('notifications');
+      return;
+    }
+    if (tab === 'calendar') {
+      switchScreen('timeline');
+      return;
+    }
+    if (tab === 'settings') {
+      switchScreen('settings');
+    }
+  }, [switchScreen]);
 
   const handleSaveReminder = useCallback(async (input: CreateReminderInput) => {
     try {
@@ -91,60 +135,45 @@ export default function HomeScreen({ notificationOpenRequest }: HomeScreenProps)
     }
   }, [addReminder]);
 
-  const handleBackToHome = useCallback(() => {
-    Animated.spring(slideAnim, {
-      toValue: 0,
-      useNativeDriver: true,
-      tension: 65,
-      friction: 10,
-    }).start(() => {
-      setCurrentScreen('home');
-    });
-  }, [slideAnim]);
-
-  const handleTabPress = useCallback((tab: TabName) => {
-    if (tab === 'dashboard') {
-      setCurrentScreen('home');
-    } else if (tab === 'notifications') {
-      setCurrentScreen('notifications');
-    } else if (tab === 'calendar') {
-      setCurrentScreen('timeline');
-    } else if (tab === 'settings') {
-      setCurrentScreen('settings');
-    }
-  }, []);
+  const screenTransitionStyle = {
+    flex: 1,
+  } as const;
 
   // Render separate screens for timeline, notifications, settings
   if (currentScreen === 'notifications') {
     return (
-      <ProgressScreen
-        onBack={handleBackToHome}
-        onCreateReminder={handleCreateReminder}
-        onTabPress={handleTabPress}
-        openReminderRequest={notificationOpenRequest ?? null}
-      />
+      <Animated.View style={screenTransitionStyle}>
+        <ProgressScreen
+          onBack={handleBackToHome}
+          onCreateReminder={handleCreateReminder}
+          onTabPress={handleTabPress}
+          openReminderRequest={notificationOpenRequest ?? null}
+        />
+      </Animated.View>
     );
   }
 
   if (currentScreen === 'timeline') {
     return (
-      <TimelineScreenV2
-        onCreateReminder={handleCreateReminder}
-        onTabPress={handleTabPress}
-      />
+      <Animated.View style={screenTransitionStyle}>
+        <TimelineScreenV2
+          onCreateReminder={handleCreateReminder}
+          onTabPress={handleTabPress}
+        />
+      </Animated.View>
     );
   }
 
   if (currentScreen === 'settings') {
     return (
-      <>
+      <Animated.View style={screenTransitionStyle}>
         <SettingsScreen />
         <BottomNavBar
           activeTab="settings"
           onTabPress={handleTabPress}
           onCreateReminder={handleCreateReminder}
         />
-      </>
+      </Animated.View>
     );
   }
 

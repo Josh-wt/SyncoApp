@@ -12,11 +12,105 @@ const redirectUri = AuthSession.makeRedirectUri({
   path: 'auth',
 });
 
-console.log('Auth redirect URI:', redirectUri);
+const completedAuthCallbacks = new Set<string>();
+const inFlightAuthCallbacks = new Map<string, Promise<boolean>>();
+
+function getCallbackParams(callbackUrl: string): {
+  queryParams: URLSearchParams;
+  hashParams: URLSearchParams;
+} {
+  const url = new URL(callbackUrl);
+  return {
+    queryParams: new URLSearchParams(url.search),
+    hashParams: new URLSearchParams(url.hash.startsWith('#') ? url.hash.slice(1) : url.hash),
+  };
+}
+
+export async function completeAuthFromUrl(callbackUrl: string | null | undefined): Promise<boolean> {
+  if (!callbackUrl) {
+    return false;
+  }
+
+  let queryParams: URLSearchParams;
+  let hashParams: URLSearchParams;
+  try {
+    ({ queryParams, hashParams } = getCallbackParams(callbackUrl));
+  } catch {
+    return false;
+  }
+
+  const errorCode = queryParams.get('error') || hashParams.get('error');
+  const errorDescription =
+    queryParams.get('error_description') ||
+    hashParams.get('error_description');
+
+  if (errorCode || errorDescription) {
+    throw new Error(errorDescription || errorCode || 'OAuth sign in failed');
+  }
+
+  const authCode = queryParams.get('code') || hashParams.get('code');
+  const accessToken = hashParams.get('access_token') || queryParams.get('access_token');
+  const refreshToken = hashParams.get('refresh_token') || queryParams.get('refresh_token');
+
+  if (authCode) {
+    const callbackKey = `code:${authCode}`;
+
+    if (completedAuthCallbacks.has(callbackKey)) {
+      return true;
+    }
+
+    const existingCompletion = inFlightAuthCallbacks.get(callbackKey);
+    if (existingCompletion) {
+      return existingCompletion;
+    }
+
+    const completion = (async (): Promise<boolean> => {
+      const { error } = await supabase.auth.exchangeCodeForSession(authCode);
+      if (error) {
+        // Another callback handler may have already exchanged this code.
+        const { data: existingSession } = await supabase.auth.getSession();
+        if (existingSession.session) {
+          return true;
+        }
+        throw error;
+      }
+      return true;
+    })();
+
+    inFlightAuthCallbacks.set(callbackKey, completion);
+
+    try {
+      const handled = await completion;
+      if (handled) {
+        completedAuthCallbacks.add(callbackKey);
+        if (completedAuthCallbacks.size > 20) {
+          const oldestKey = completedAuthCallbacks.values().next().value;
+          if (oldestKey) {
+            completedAuthCallbacks.delete(oldestKey);
+          }
+        }
+      }
+      return handled;
+    } finally {
+      inFlightAuthCallbacks.delete(callbackKey);
+    }
+  }
+
+  if (accessToken && refreshToken) {
+    const { error } = await supabase.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    });
+    if (error) {
+      throw error;
+    }
+    return true;
+  }
+
+  return false;
+}
 
 export async function signInWithGoogle() {
-  console.log('🔵 [Google Auth] Starting Google sign-in flow');
-
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
@@ -26,57 +120,34 @@ export async function signInWithGoogle() {
   });
 
   if (error) {
-    console.error('🔴 [Google Auth] Failed to get OAuth URL:', error);
     throw error;
   }
 
   if (!data.url) {
-    console.error('🔴 [Google Auth] No OAuth URL returned');
     throw new Error('No OAuth URL returned');
   }
 
-  console.log('🔵 [Google Auth] Opening browser for authentication');
   const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUri);
 
-  console.log('🔵 [Google Auth] Browser result:', {
-    type: result.type,
-    url: result.type === 'success' ? result.url : 'N/A'
-  });
+  if (result.type === 'success') {
+    await completeAuthFromUrl(result.url);
+  }
+
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError) {
+      throw sessionError;
+    }
+    if (sessionData.session) {
+      return sessionData;
+    }
+    if (attempt < 5) {
+      await new Promise((resolve) => setTimeout(resolve, 150));
+    }
+  }
 
   if (result.type === 'success') {
-    const url = new URL(result.url);
-    const params = new URLSearchParams(url.hash.slice(1));
-    const accessToken = params.get('access_token');
-    const refreshToken = params.get('refresh_token');
-
-    console.log('🔵 [Google Auth] Tokens received:', {
-      hasAccessToken: !!accessToken,
-      hasRefreshToken: !!refreshToken
-    });
-
-    if (accessToken && refreshToken) {
-      console.log('🔵 [Google Auth] Setting session with tokens');
-      const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
-        access_token: accessToken,
-        refresh_token: refreshToken,
-      });
-
-      if (sessionError) {
-        console.error('🔴 [Google Auth] Failed to set session:', sessionError);
-        throw sessionError;
-      }
-
-      console.log('✅ [Google Auth] Session set successfully:', {
-        hasSession: !!sessionData.session,
-        userId: sessionData.user?.id
-      });
-
-      return sessionData;
-    } else {
-      console.error('🔴 [Google Auth] Missing tokens in redirect URL');
-    }
-  } else {
-    console.log('⚠️ [Google Auth] Browser auth not successful, result type:', result.type);
+    throw new Error('OAuth callback did not contain a valid session');
   }
 
   return null;
@@ -94,10 +165,17 @@ export async function signInWithApple() {
     const credential = await appleAuth.performRequest({
       requestedOperation: AppleRequestOperation.LOGIN,
       requestedScopes: [AppleRequestScope.FULL_NAME, AppleRequestScope.EMAIL],
+      nonceEnabled: true,
     });
+
+    const nonce =
+      typeof credential.nonce === 'string' && credential.nonce.length > 0
+        ? credential.nonce
+        : undefined;
 
     console.log('🍎 [Apple Auth] Credential received:', {
       hasToken: !!credential.identityToken,
+      hasNonce: !!nonce,
       email: credential.email,
       user: credential.user,
       fullName: credential.fullName
@@ -112,6 +190,7 @@ export async function signInWithApple() {
     const { data, error } = await supabase.auth.signInWithIdToken({
       provider: 'apple',
       token: credential.identityToken,
+      ...(nonce ? { nonce } : {}),
     });
 
     if (error) {

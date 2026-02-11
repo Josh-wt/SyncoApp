@@ -172,8 +172,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
           setAccentColorState(prefs.accent_color || '#2F00FF');
           setFontSizeScaleState(prefs.font_size || 'medium');
         }
-      } catch (error) {
-        console.error('Error loading theme preferences:', error);
+      } catch {
       } finally {
         setIsLoading(false);
       }

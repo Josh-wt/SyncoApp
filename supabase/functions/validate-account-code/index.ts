@@ -56,7 +56,6 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
     if (!supabaseUrl || !supabaseServiceKey) {
-      console.error('Missing Supabase environment variables');
       return new Response(
         JSON.stringify({ error: 'Server configuration error' } as ValidateCodeResponse),
         {
@@ -79,7 +78,6 @@ Deno.serve(async (req) => {
       .single();
 
     if (codeError || !codeData) {
-      console.log('Invalid or expired code:', code);
       return new Response(
         JSON.stringify({ error: 'Invalid account code' } as ValidateCodeResponse),
         {
@@ -97,7 +95,6 @@ Deno.serve(async (req) => {
     const now = new Date();
 
     if (expiresAt < now) {
-      console.log('Code expired:', code, 'expired at:', expiresAt);
       return new Response(
         JSON.stringify({ error: 'Account code has expired' } as ValidateCodeResponse),
         {
@@ -124,8 +121,7 @@ Deno.serve(async (req) => {
       .insert(syncRecord);
 
     if (syncError) {
-      console.error('Failed to record device sync:', syncError);
-      // Don't fail the request if sync recording fails, just log it
+      // Don't fail the request if sync recording fails
     }
 
     // Return success with userId
@@ -140,7 +136,6 @@ Deno.serve(async (req) => {
       }
     );
   } catch (error) {
-    console.error('Unexpected error in validate-account-code:', error);
     return new Response(
       JSON.stringify({
         error: error instanceof Error ? error.message : 'An unexpected error occurred',

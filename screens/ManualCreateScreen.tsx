@@ -28,13 +28,22 @@ import RecurringRuleModal from '../components/RecurringRuleModal';
 import TaskConfigSection, { QuickAction } from '../components/TaskConfigSection';
 import { createRecurringRule, getRecurringRules } from '../lib/reminders';
 import { createReminderActions } from '../lib/reminderActions';
-import { parseReminderFromVoice } from '../lib/aiReminders';
+import { parseReminderFromVoice, parseRemindersFromText, VoiceProcessResult } from '../lib/aiReminders';
 import { canCreateReminder } from '../lib/reminderLimits';
 import { useVoiceRecording } from '../hooks/useVoiceRecording';
 import { UnstableSiriOrb } from '../src/shared/ui/organisms/unstable_siri_orb';
 import { CreateReminderInput, NOTIFICATION_TIMING_OPTIONS, RecurringOption, RecurringRule, CreateReminderActionInput } from '../lib/types';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+const VOICE_QUICK_OPTIONS: Array<{ label: string; prompt: string }> = [
+  { label: 'Take out trash', prompt: 'Remind me to take out the trash tonight at 8pm' },
+  { label: 'Film video', prompt: 'Remind me to film a video tomorrow at 10am' },
+  { label: 'Go to sleep', prompt: 'Remind me to go to sleep tonight at 11pm' },
+  { label: 'Call mom', prompt: 'Remind me to call mom tomorrow at 7pm' },
+  { label: 'Drink water', prompt: 'Remind me to drink water every 2 hours' },
+  { label: 'Workout', prompt: 'Remind me to workout tomorrow at 6am' },
+];
 
 // Animated Card Component
 function AnimatedCard({
@@ -143,7 +152,7 @@ function AnimatedBackButton({ onPress }: { onPress: () => void }) {
   );
 }
 
-// Animated Save Button with spin loading animation
+// Animated Save Button
 function AnimatedSaveButton({
   onPress,
   disabled,
@@ -155,45 +164,6 @@ function AnimatedSaveButton({
 }) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const translateYAnim = useRef(new Animated.Value(0)).current;
-  const spinAnim = useRef(new Animated.Value(0)).current;
-  const spinnerScale = useRef(new Animated.Value(0)).current;
-  const spinAnimRef = useRef<Animated.CompositeAnimation | null>(null);
-
-  useEffect(() => {
-    if (isSaving) {
-      // Scale in the spinner
-      Animated.spring(spinnerScale, {
-        toValue: 1,
-        useNativeDriver: true,
-        tension: 300,
-        friction: 10,
-      }).start();
-      // Start continuous rotation
-      spinAnim.setValue(0);
-      const loop = Animated.loop(
-        Animated.timing(spinAnim, {
-          toValue: 1,
-          duration: 800,
-          useNativeDriver: true,
-          easing: undefined, // linear
-        })
-      );
-      spinAnimRef.current = loop;
-      loop.start();
-    } else {
-      // Scale out the spinner
-      Animated.timing(spinnerScale, {
-        toValue: 0,
-        duration: 150,
-        useNativeDriver: true,
-      }).start();
-      // Stop rotation
-      if (spinAnimRef.current) {
-        spinAnimRef.current.stop();
-        spinAnimRef.current = null;
-      }
-    }
-  }, [isSaving, spinAnim, spinnerScale]);
 
   const handlePressIn = () => {
     if (disabled) return;
@@ -228,11 +198,6 @@ function AnimatedSaveButton({
       }),
     ]).start();
   };
-
-  const spinInterpolate = spinAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
-  });
 
   return (
     <Pressable
@@ -274,34 +239,10 @@ function AnimatedSaveButton({
               style={styles.highlightBottom}
             />
             <View style={styles.saveButtonContent}>
-              <Text style={styles.saveButtonText}>
-                {isSaving ? 'Saving' : 'Save Reminder'}
+              <Text style={styles.saveButtonText} numberOfLines={1}>
+                {isSaving ? 'Saving reminder...' : 'Save Reminder'}
               </Text>
-              {isSaving ? (
-                <Animated.View
-                  style={{
-                    transform: [{ rotate: spinInterpolate }, { scale: spinnerScale }],
-                    opacity: spinnerScale,
-                    width: 28,
-                    height: 28,
-                    borderRadius: 14,
-                    backgroundColor: 'rgba(255,255,255,0.2)',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <View
-                    style={{
-                      width: 20,
-                      height: 20,
-                      borderRadius: 10,
-                      borderWidth: 2.5,
-                      borderColor: 'rgba(255,255,255,0.3)',
-                      borderTopColor: '#ffffff',
-                    }}
-                  />
-                </Animated.View>
-              ) : (
+              {!isSaving && (
                 <CheckAllIcon />
               )}
             </View>
@@ -716,13 +657,13 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 400,
+        duration: 210,
         useNativeDriver: true,
       }),
       Animated.spring(slideAnim, {
         toValue: 0,
-        tension: 50,
-        friction: 9,
+        tension: 120,
+        friction: 16,
         useNativeDriver: true,
       }),
     ]).start();
@@ -772,15 +713,14 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
   const [isProcessingVoice, setIsProcessingVoice] = useState(false);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [isCreatingReminder, setIsCreatingReminder] = useState(false);
-  const [pendingReminders, setPendingReminders] = useState<CreateReminderInput[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [isVoiceClosing, setIsVoiceClosing] = useState(false);
 
   // Voice recording hook
-  const { isRecording, duration, error: recordingError, startRecording, stopRecording, cancelRecording } = useVoiceRecording();
+  const { isRecording, error: recordingError, startRecording, stopRecording, cancelRecording } = useVoiceRecording();
 
   // Voice mode animations
-  const micPositionAnim = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
   const micScaleAnim = useRef(new Animated.Value(1)).current;
-  const micOpacityAnim = useRef(new Animated.Value(1)).current;
   const voiceOverlayOpacity = useRef(new Animated.Value(0)).current;
   const orbPositionAnim = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
   const orbScaleAnim = useRef(new Animated.Value(1)).current;
@@ -807,13 +747,12 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
       }
 
       try {
-        const { AudioModule } = await import('expo-audio');
-        const status = await AudioModule.getRecordingPermissionsAsync();
+        const { getRecordingPermissionsAsync } = await import('expo-audio');
+        const status = await getRecordingPermissionsAsync();
         if (isMounted) {
           setHasPermission(status.granted);
         }
-      } catch (err) {
-        console.warn('expo-audio unavailable:', err);
+      } catch {
         if (isMounted) {
           setHasPermission(false);
         }
@@ -828,94 +767,248 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
   }, []);
 
 
-  // Handle voice mode toggle
-  const handleMicPress = useCallback(async () => {
+  // Open AI modal (voice starts only when orb is tapped)
+  const handleMicPress = useCallback(() => {
     if (isVoiceMode) return;
-
-    if (!Device.isDevice) {
-      setVoiceError('Audio recording is only available on physical devices.');
-      return;
-    }
-
-    // Check and request permission if needed
-    if (hasPermission === false) {
-      try {
-        const { AudioModule } = await import('expo-audio');
-        const status = await AudioModule.requestRecordingPermissionsAsync();
-        setHasPermission(status.granted);
-
-        if (!status.granted) {
-          setVoiceError('Microphone permission is required for voice reminders.');
-          return;
-        }
-      } catch (err) {
-        console.warn('expo-audio unavailable:', err);
-        setVoiceError('Voice recording is not available in this build.');
-        return;
-      }
-    }
 
     setVoiceError(null);
     setVoiceTranscript('');
     setAiResponse('');
+    setChatInput('');
     setIsCreatingReminder(false);
-
-    // Reset orb position before starting
+    setIsProcessingVoice(false);
+    setIsVoiceClosing(false);
     orbPositionAnim.setValue({ x: 0, y: 0 });
-    orbScaleAnim.setValue(1);
+    // Start from the same visual end-state as close animation, then reverse it.
+    orbScaleAnim.setValue(0.3);
+    voiceOverlayOpacity.setValue(0);
+    micScaleAnim.setValue(1);
 
-    // Show overlay immediately so it can animate in
     setShowVoiceOverlay(true);
     setIsVoiceMode(true);
 
-    // Animate mic to center with smooth transition
     Animated.parallel([
-      Animated.spring(micPositionAnim, {
-        toValue: { x: -(SCREEN_WIDTH / 2 - 48 - 24), y: SCREEN_HEIGHT / 3 - 48 },
-        useNativeDriver: true,
-        tension: 50,
-        friction: 12,
-      }),
       Animated.spring(micScaleAnim, {
-        toValue: 1.8,
+        toValue: 1,
         useNativeDriver: true,
         tension: 50,
         friction: 12,
       }),
-      Animated.timing(micOpacityAnim, {
-        toValue: 0,
-        duration: 250,
+      Animated.spring(orbPositionAnim, {
+        toValue: { x: 0, y: 0 },
         useNativeDriver: true,
+        tension: 40,
+        friction: 10,
+      }),
+      Animated.spring(orbScaleAnim, {
+        toValue: 1,
+        useNativeDriver: true,
+        tension: 40,
+        friction: 10,
       }),
       Animated.timing(voiceOverlayOpacity, {
         toValue: 1,
-        duration: 400,
-        useNativeDriver: true,
+        duration: 350,
+        useNativeDriver: false,
       }),
-    ]).start(async () => {
-      // Start recording after animation completes
-      await startRecording();
-    });
-  }, [isVoiceMode, hasPermission, micPositionAnim, micScaleAnim, voiceOverlayOpacity, orbPositionAnim, orbScaleAnim, startRecording]);
+    ]).start();
 
-  // Reset voice state for next recording
-  const resetVoiceForNextRecording = useCallback(async () => {
-    setVoiceTranscript('');
-    setAiResponse('');
-    setVoiceError(null);
-    setIsProcessingVoice(false);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  }, [isVoiceMode, micScaleAnim, voiceOverlayOpacity, orbPositionAnim, orbScaleAnim]);
 
-    // Start recording again after brief delay
-    setTimeout(async () => {
-      await startRecording();
-    }, 500);
-  }, [startRecording]);
+  const ensureMicrophonePermission = useCallback(async (): Promise<boolean> => {
+    if (!Device.isDevice) {
+      setVoiceError('Audio recording is only available on physical devices.');
+      return false;
+    }
+
+    if (hasPermission === true) {
+      return true;
+    }
+
+    try {
+      const { requestRecordingPermissionsAsync } = await import('expo-audio');
+      const status = await requestRecordingPermissionsAsync();
+      setHasPermission(status.granted);
+
+      if (!status.granted) {
+        setVoiceError('Microphone permission is required for voice reminders.');
+        return false;
+      }
+
+      return true;
+    } catch {
+      setVoiceError('Voice recording is not available in this build.');
+      return false;
+    }
+  }, [hasPermission]);
+
+  const handleProcessedResult = useCallback(async (result: VoiceProcessResult) => {
+    setVoiceTranscript(result.transcript);
+
+    if (result.type === 'conversation') {
+      setAiResponse(result.response);
+      return;
+    }
+
+    const reminderCount = result.reminders.length;
+    if (reminderCount === 0) {
+      setVoiceError('No reminders found from that request.');
+      return;
+    }
+
+    if (reminderCount === 1) {
+      const { reminder: reminderData, recurringRule: recurringRuleData } = result.reminders[0];
+
+      setTitle(reminderData.title);
+      if (reminderData.scheduled_time) {
+        const scheduledDate = new Date(reminderData.scheduled_time);
+        if (!Number.isNaN(scheduledDate.getTime())) {
+          setSelectedDate(scheduledDate);
+          setSelectedTime(scheduledDate);
+        }
+      }
+      setNotes(reminderData.description || '');
+      setIsPriority(Boolean(reminderData.is_priority));
+      setNotifyBeforeMinutes(reminderData.notify_before_minutes ?? 0);
+
+      if (recurringRuleData) {
+        setCustomRule({
+          id: '',
+          name: recurringRuleData.name,
+          frequency: recurringRuleData.frequency,
+          frequency_unit: recurringRuleData.frequency_unit,
+          selected_days: recurringRuleData.selected_days,
+        });
+        setRecurringOption('custom');
+        setSelectedSavedRule(null);
+      } else {
+        setRecurringOption('none');
+        setSelectedSavedRule(null);
+        setCustomRule(null);
+      }
+
+      setAiResponse('Review and save your reminder');
+      setTimeout(() => {
+        setIsVoiceMode(false);
+        setIsVoiceClosing(true);
+        Animated.parallel([
+          Animated.spring(micScaleAnim, {
+            toValue: 1,
+            useNativeDriver: true,
+            tension: 50,
+            friction: 12,
+          }),
+          Animated.spring(orbPositionAnim, {
+            toValue: { x: 0, y: 0 },
+            useNativeDriver: true,
+            tension: 40,
+            friction: 10,
+          }),
+          Animated.spring(orbScaleAnim, {
+            toValue: 1,
+            useNativeDriver: true,
+            tension: 40,
+            friction: 10,
+          }),
+          Animated.timing(voiceOverlayOpacity, {
+            toValue: 0,
+            duration: 350,
+            useNativeDriver: false,
+          }),
+        ]).start(() => {
+          setShowVoiceOverlay(false);
+          orbScaleAnim.setValue(1);
+          setIsVoiceClosing(false);
+        });
+      }, 900);
+      return;
+    }
+
+    setIsCreatingReminder(true);
+    setAiResponse(`Creating ${reminderCount} reminders...`);
+
+    Animated.parallel([
+      Animated.spring(orbPositionAnim, {
+        toValue: { x: 0, y: -SCREEN_HEIGHT / 6 },
+        useNativeDriver: true,
+        tension: 50,
+        friction: 8,
+      }),
+      Animated.spring(orbScaleAnim, {
+        toValue: 1.2,
+        useNativeDriver: true,
+        tension: 50,
+        friction: 8,
+      }),
+    ]).start();
+
+    try {
+      for (const { reminder: reminderData, recurringRule: recurringRuleData } of result.reminders) {
+        const parsedScheduled = reminderData.scheduled_time ? new Date(reminderData.scheduled_time) : null;
+        const scheduledTime =
+          parsedScheduled && !Number.isNaN(parsedScheduled.getTime())
+            ? parsedScheduled
+            : new Date(Date.now() + 10 * 60 * 1000);
+
+        let recurringRuleId: string | undefined;
+        if (recurringRuleData) {
+          const createdRule = await createRecurringRule({
+            name: recurringRuleData.name,
+            frequency: recurringRuleData.frequency,
+            frequency_unit: recurringRuleData.frequency_unit,
+            selected_days: recurringRuleData.selected_days,
+          });
+          recurringRuleId = createdRule.id;
+        }
+
+        const reminderInput: CreateReminderInput = {
+          title: reminderData.title,
+          scheduled_time: scheduledTime.toISOString(),
+          description: reminderData.description,
+          is_priority: reminderData.is_priority,
+          notify_before_minutes: reminderData.notify_before_minutes,
+          recurring_rule_id: recurringRuleId,
+        };
+
+        await onSave(reminderInput);
+      }
+
+      setAiResponse(`${reminderCount} reminders created!`);
+
+      await new Promise<void>((resolve) => {
+        Animated.parallel([
+          Animated.spring(orbPositionAnim, {
+            toValue: { x: SCREEN_WIDTH / 3, y: -SCREEN_HEIGHT / 2.5 },
+            useNativeDriver: true,
+            tension: 50,
+            friction: 8,
+          }),
+          Animated.spring(orbScaleAnim, {
+            toValue: 0.4,
+            useNativeDriver: true,
+            tension: 50,
+            friction: 8,
+          }),
+        ]).start(() => resolve());
+      });
+
+      setTimeout(() => {
+        setIsCreatingReminder(false);
+        setIsVoiceMode(false);
+        setShowVoiceOverlay(false);
+        onBack();
+      }, 700);
+    } catch {
+      setVoiceError('Failed to create reminders');
+      setIsCreatingReminder(false);
+    }
+  }, [micScaleAnim, onBack, onSave, orbPositionAnim, orbScaleAnim, voiceOverlayOpacity]);
 
   // Handle stop recording and process voice
   const handleStopVoice = useCallback(async () => {
-    if (!isRecording) return;
+    if (!isRecording || isProcessingVoice) return;
 
-    // Clear auto-stop timer
     if (autoStopTimerRef.current) {
       clearTimeout(autoStopTimerRef.current);
       autoStopTimerRef.current = null;
@@ -930,198 +1023,59 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
         throw new Error('No audio recorded');
       }
 
-      // Process voice with AI
-      const result = await parseReminderFromVoice(audioData.base64, audioData.mimeType);
-
-      // Update transcript
-      setVoiceTranscript(result.transcript);
-
-      // Check if this is a conversation or reminder creation
-      if (result.type === 'conversation') {
-        // Just display the AI response and reset for next command
-        setAiResponse(result.response);
-
-        // Reset after showing response
-        setTimeout(() => {
-          resetVoiceForNextRecording();
-        }, 2000);
-      } else if (result.type === 'reminder') {
-        // Show transcription immediately
-        setVoiceTranscript(result.transcript);
-
-        const reminderCount = result.reminders.length;
-
-        // Single reminder: populate form for user review
-        if (reminderCount === 1) {
-          const { reminder: reminderData, recurringRule: recurringRuleData } = result.reminders[0];
-
-          // Populate form fields
-          setTitle(reminderData.title);
-          if (reminderData.scheduled_time) {
-            const scheduledDate = new Date(reminderData.scheduled_time);
-            setSelectedDate(scheduledDate);
-            setSelectedTime(scheduledDate);
-          }
-          if (reminderData.description) {
-            setNotes(reminderData.description);
-          }
-          if (reminderData.is_priority !== undefined) {
-            setIsPriority(reminderData.is_priority);
-          }
-          if (reminderData.notify_before_minutes !== undefined) {
-            setNotifyBeforeMinutes(reminderData.notify_before_minutes);
-          }
-
-          // Handle recurring rule
-          if (recurringRuleData) {
-            setCustomRule({
-              id: '',
-              name: recurringRuleData.name,
-              frequency: recurringRuleData.frequency,
-              frequency_unit: recurringRuleData.frequency_unit,
-              selected_days: recurringRuleData.selected_days,
-            });
-            setRecurringOption('custom');
-            setSelectedSavedRule(null);
-          }
-
-          // Show success message and close voice mode
-          setAiResponse('Review and save your reminder');
-          setTimeout(() => {
-            setIsVoiceMode(false);
-            setIsProcessingVoice(false);
-            // Animate out smoothly, then unmount
-            Animated.parallel([
-              Animated.spring(micPositionAnim, {
-                toValue: { x: 0, y: 0 },
-                useNativeDriver: true,
-                tension: 50,
-                friction: 12,
-              }),
-              Animated.spring(micScaleAnim, {
-                toValue: 1,
-                useNativeDriver: true,
-                tension: 50,
-                friction: 12,
-              }),
-              Animated.timing(micOpacityAnim, {
-                toValue: 1,
-                duration: 300,
-                useNativeDriver: true,
-              }),
-              Animated.timing(voiceOverlayOpacity, {
-                toValue: 0,
-                duration: 350,
-                useNativeDriver: true,
-              }),
-            ]).start(() => {
-              setShowVoiceOverlay(false);
-            });
-          }, 1500);
-        } else {
-          // Multiple reminders: auto-create all and close
-          setTimeout(() => {
-            setIsCreatingReminder(true);
-            setAiResponse(`Creating ${reminderCount} reminders...`);
-
-            Animated.parallel([
-              Animated.spring(orbPositionAnim, {
-                toValue: { x: 0, y: -SCREEN_HEIGHT / 6 },
-                useNativeDriver: true,
-                tension: 50,
-                friction: 8,
-              }),
-              Animated.spring(orbScaleAnim, {
-                toValue: 1.2,
-                useNativeDriver: true,
-                tension: 50,
-                friction: 8,
-              }),
-            ]).start();
-          }, 300);
-
-          // Process all reminders in background
-          setTimeout(async () => {
-            try {
-              // Create all reminders
-              for (const { reminder: reminderData, recurringRule: recurringRuleData } of result.reminders) {
-                const scheduledTime = new Date(reminderData.scheduled_time);
-
-                let recurringRuleId: string | undefined;
-                if (recurringRuleData) {
-                  const createdRule = await createRecurringRule({
-                    name: recurringRuleData.name,
-                    frequency: recurringRuleData.frequency,
-                    frequency_unit: recurringRuleData.frequency_unit,
-                    selected_days: recurringRuleData.selected_days,
-                  });
-                  recurringRuleId = createdRule.id;
-                }
-
-                const reminderInput: CreateReminderInput = {
-                  title: reminderData.title,
-                  scheduled_time: scheduledTime.toISOString(),
-                  description: reminderData.description,
-                  is_priority: reminderData.is_priority,
-                  notify_before_minutes: reminderData.notify_before_minutes,
-                  recurring_rule_id: recurringRuleId,
-                };
-
-                await onSave(reminderInput);
-              }
-
-              // Show success and animate orb to top right
-              setAiResponse(`${reminderCount} reminders created!`);
-
-              await new Promise<void>((resolve) => {
-                Animated.parallel([
-                  Animated.spring(orbPositionAnim, {
-                    toValue: { x: SCREEN_WIDTH / 3, y: -SCREEN_HEIGHT / 2.5 },
-                    useNativeDriver: true,
-                    tension: 50,
-                    friction: 8,
-                  }),
-                  Animated.spring(orbScaleAnim, {
-                    toValue: 0.4,
-                    useNativeDriver: true,
-                    tension: 50,
-                    friction: 8,
-                  }),
-                ]).start(() => resolve());
-              });
-
-              // Navigate to home
-              setTimeout(() => {
-                setIsCreatingReminder(false);
-                setIsVoiceMode(false);
-                setShowVoiceOverlay(false);
-                onBack();
-              }, 800);
-            } catch (error) {
-              setVoiceError('Failed to create reminders');
-              setIsCreatingReminder(false);
-              setTimeout(() => {
-                resetVoiceForNextRecording();
-              }, 2000);
-            }
-          }, 800);
-        }
-      }
+      const result = await parseReminderFromVoice(audioData.file, audioData.mimeType);
+      await handleProcessedResult(result);
     } catch (err) {
       setVoiceError(err instanceof Error ? err.message : 'Failed to process voice');
-
-      // Reset after showing error
-      setTimeout(() => {
-        resetVoiceForNextRecording();
-      }, 3000);
     } finally {
       setIsProcessingVoice(false);
     }
-  }, [isRecording, stopRecording, onSave, resetVoiceForNextRecording]);
+  }, [handleProcessedResult, isProcessingVoice, isRecording, stopRecording]);
+
+  const handleChatSubmit = useCallback(async (inputText?: string) => {
+    if (isCreatingReminder || isProcessingVoice) return;
+
+    const text = (inputText ?? chatInput).trim();
+    if (!text) return;
+
+    setChatInput('');
+    setVoiceError(null);
+    setAiResponse('');
+    setVoiceTranscript(text);
+    setIsProcessingVoice(true);
+
+    try {
+      const result = await parseRemindersFromText(text);
+      await handleProcessedResult(result);
+    } catch (err) {
+      setVoiceError(err instanceof Error ? err.message : 'Failed to process chat input');
+    } finally {
+      setIsProcessingVoice(false);
+    }
+  }, [chatInput, handleProcessedResult, isCreatingReminder, isProcessingVoice]);
+
+  const handleOrbPress = useCallback(async () => {
+    if (isCreatingReminder || isProcessingVoice) return;
+
+    if (isRecording) {
+      await handleStopVoice();
+      return;
+    }
+
+    const canRecord = await ensureMicrophonePermission();
+    if (!canRecord) return;
+
+    setVoiceError(null);
+    setAiResponse('');
+    setVoiceTranscript('');
+
+    await startRecording();
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }, [ensureMicrophonePermission, handleStopVoice, isCreatingReminder, isProcessingVoice, isRecording, startRecording]);
 
   // Auto-stop recording after duration (simulates silence detection)
   useEffect(() => {
-    if (isRecording && isVoiceMode) {
+    if (isRecording && isVoiceMode && !isProcessingVoice) {
       // Auto-stop after 10 seconds of recording
       autoStopTimerRef.current = setTimeout(() => {
         handleStopVoice();
@@ -1134,38 +1088,36 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
         }
       };
     }
-  }, [isRecording, isVoiceMode, handleStopVoice]);
+  }, [isProcessingVoice, isRecording, isVoiceMode, handleStopVoice]);
 
   // Animate notify picker modal
   useEffect(() => {
     if (showNotifyPicker) {
       setNotifyPickerMounted(true);
-      // Opening animation - very slow and smooth
       Animated.parallel([
         Animated.spring(notifyPickerSlide, {
           toValue: 0,
           useNativeDriver: true,
-          tension: 30,
-          friction: 25,
+          tension: 140,
+          friction: 18,
         }),
         Animated.timing(notifyPickerBackdrop, {
           toValue: 1,
-          duration: 500,
+          duration: 170,
           useNativeDriver: true,
         }),
       ]).start();
     } else if (notifyPickerMounted) {
-      // Closing animation - very slow and smooth
       Animated.parallel([
         Animated.spring(notifyPickerSlide, {
           toValue: SCREEN_HEIGHT,
           useNativeDriver: true,
-          tension: 25,
-          friction: 30,
+          tension: 140,
+          friction: 20,
         }),
         Animated.timing(notifyPickerBackdrop, {
           toValue: 0,
-          duration: 600,
+          duration: 190,
           useNativeDriver: true,
         }),
       ]).start(({ finished }) => {
@@ -1180,32 +1132,30 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
   useEffect(() => {
     if (showRecurringPicker) {
       setRecurringPickerMounted(true);
-      // Opening animation - very slow and smooth
       Animated.parallel([
         Animated.spring(recurringPickerSlide, {
           toValue: 0,
           useNativeDriver: true,
-          tension: 30,
-          friction: 25,
+          tension: 140,
+          friction: 18,
         }),
         Animated.timing(recurringPickerBackdrop, {
           toValue: 1,
-          duration: 500,
+          duration: 170,
           useNativeDriver: true,
         }),
       ]).start();
     } else if (recurringPickerMounted) {
-      // Closing animation - very slow and smooth
       Animated.parallel([
         Animated.spring(recurringPickerSlide, {
           toValue: SCREEN_HEIGHT,
           useNativeDriver: true,
-          tension: 25,
-          friction: 30,
+          tension: 140,
+          friction: 20,
         }),
         Animated.timing(recurringPickerBackdrop, {
           toValue: 0,
-          duration: 600,
+          duration: 190,
           useNativeDriver: true,
         }),
       ]).start(({ finished }) => {
@@ -1226,29 +1176,15 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
 
     await cancelRecording();
     setIsVoiceMode(false);
-    setVoiceTranscript('');
-    setAiResponse('');
-    setVoiceError(null);
-    setIsCreatingReminder(false);
+    setIsVoiceClosing(true);
 
     // Animate FIRST, then unmount overlay after animation completes
     Animated.parallel([
-      Animated.spring(micPositionAnim, {
-        toValue: { x: 0, y: 0 },
-        useNativeDriver: true,
-        tension: 50,
-        friction: 12,
-      }),
       Animated.spring(micScaleAnim, {
         toValue: 1,
         useNativeDriver: true,
         tension: 50,
         friction: 12,
-      }),
-      Animated.timing(micOpacityAnim, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: true,
       }),
       Animated.spring(orbPositionAnim, {
         toValue: { x: 0, y: 0 },
@@ -1265,14 +1201,21 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
       Animated.timing(voiceOverlayOpacity, {
         toValue: 0,
         duration: 350,
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
     ]).start(() => {
       // Only unmount after exit animation completes
       setShowVoiceOverlay(false);
       orbScaleAnim.setValue(1);
+      setVoiceTranscript('');
+      setAiResponse('');
+      setVoiceError(null);
+      setIsCreatingReminder(false);
+      setIsProcessingVoice(false);
+      setChatInput('');
+      setIsVoiceClosing(false);
     });
-  }, [cancelRecording, micPositionAnim, micScaleAnim, micOpacityAnim, voiceOverlayOpacity, orbPositionAnim, orbScaleAnim]);
+  }, [cancelRecording, micScaleAnim, orbPositionAnim, orbScaleAnim, voiceOverlayOpacity]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -1345,20 +1288,15 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
         recurring_rule_id: recurringRuleId,
       });
 
-      // Create reminder actions if any were selected
-      if (reminderActions.length > 0 && newReminder?.id) {
-        try {
-          await createReminderActions(newReminder.id, reminderActions);
-        } catch (error) {
-          console.error('Failed to create reminder actions:', error);
-          // Don't fail the whole operation if actions fail
-        }
-      }
-
+      // Return to timeline immediately; side work continues in background.
+      setIsSaving(false);
       onBack();
+
+      if (reminderActions.length > 0 && newReminder?.id) {
+        void createReminderActions(newReminder.id, reminderActions).catch(() => {});
+      }
     } catch {
       // Error handled by parent
-    } finally {
       setIsSaving(false);
     }
   }, [title, notes, selectedDate, selectedTime, isPriority, notifyBeforeMinutes, recurringOption, selectedSavedRule, customRule, reminderActions, onSave, onBack]);
@@ -1442,11 +1380,8 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
                   <Animated.View
                     style={{
                       transform: [
-                        { translateX: micPositionAnim.x },
-                        { translateY: micPositionAnim.y },
                         { scale: micScaleAnim },
                       ],
-                      opacity: micOpacityAnim,
                     }}
                   >
                     <MicSparkleIcon size={24} />
@@ -1523,10 +1458,7 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
                     }));
                     setReminderActions(actionInputs);
                   }}
-                  onRepeatChange={(repeat) => {
-                    // Handle repeat configuration
-                    console.log('Repeat config:', repeat);
-                  }}
+                  onRepeatChange={() => {}}
                 />
 
                 {/* Notes Card */}
@@ -1841,7 +1773,7 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
                 <CloseIcon size={20} color="#2F00FF" />
               </Pressable>
 
-              {/* Header with "I'm Listening..." */}
+              {/* Header */}
               <View style={styles.voiceHeader}>
                 <View style={styles.voiceWaveformIcon}>
                   <View style={[styles.waveformBar, { height: 12 }]} />
@@ -1850,21 +1782,90 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
                   <View style={[styles.waveformBar, { height: 24 }]} />
                   <View style={[styles.waveformBar, { height: 14 }]} />
                 </View>
-                <Text style={styles.voiceHeaderText}>I'm Listening...</Text>
+                <View>
+                  <Text style={styles.voiceHeaderText}>Voice + Chat</Text>
+                  <Text style={styles.voiceHeaderSubText}>Tap orb to talk, or type below</Text>
+                </View>
               </View>
 
               {/* Chat Bubbles Container - Hide when creating reminder */}
               {!isCreatingReminder && (
                 <View style={styles.voiceChatContainer}>
+                  <View style={styles.voiceComposer}>
+                    <View style={styles.voiceComposerInputRow}>
+                      <View style={styles.voiceComposerInputWrap}>
+                        {isVoiceClosing ? (
+                          <View style={styles.voiceComposerInputFallbackGlass} />
+                        ) : (
+                          <BlurView intensity={40} tint="light" style={styles.voiceComposerInputBlur} />
+                        )}
+                        <TextInput
+                          style={styles.voiceComposerInput}
+                          placeholder="Type a reminder or chat"
+                          placeholderTextColor="rgba(47, 0, 255, 0.45)"
+                          value={chatInput}
+                          onChangeText={setChatInput}
+                          editable={!isProcessingVoice && !isCreatingReminder}
+                          returnKeyType="send"
+                          onSubmitEditing={() => {
+                            void handleChatSubmit();
+                          }}
+                        />
+                      </View>
+
+                      <Pressable
+                        style={[
+                          styles.voiceComposerSend,
+                          !chatInput.trim() || isProcessingVoice ? styles.voiceSuggestionChipDisabled : undefined,
+                        ]}
+                        disabled={!chatInput.trim() || isProcessingVoice}
+                        onPress={() => {
+                          void handleChatSubmit();
+                        }}
+                      >
+                        {isVoiceClosing ? (
+                          <View style={styles.voiceSuggestionChipFallbackGlass} />
+                        ) : (
+                          <BlurView intensity={32} tint="light" style={styles.voiceSuggestionChipBlur} />
+                        )}
+                        <View style={styles.voiceSuggestionChipGloss} />
+                        <Text style={styles.voiceComposerSendText}>Send</Text>
+                      </Pressable>
+                    </View>
+
+                    <View style={styles.voiceSuggestionGrid}>
+                      {VOICE_QUICK_OPTIONS.map((option, index) => (
+                        <Pressable
+                          key={option.label}
+                          style={[
+                            styles.voiceSuggestionChip,
+                            index % 2 === 0 ? styles.voiceSuggestionChipTiltLeft : styles.voiceSuggestionChipTiltRight,
+                          ]}
+                          onPress={() => {
+                            void handleChatSubmit(option.prompt);
+                          }}
+                          disabled={isProcessingVoice}
+                        >
+                          {isVoiceClosing ? (
+                            <View style={styles.voiceSuggestionChipFallbackGlass} />
+                          ) : (
+                            <BlurView intensity={32} tint="light" style={styles.voiceSuggestionChipBlur} />
+                          )}
+                          <View style={styles.voiceSuggestionChipGloss} />
+                          <Text style={styles.voiceSuggestionChipText}>{option.label}</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </View>
+
                   <ScrollView
+                    style={styles.voiceMessagesScroll}
                     contentContainerStyle={styles.voiceChatContent}
                     showsVerticalScrollIndicator={false}
                   >
-                    {!voiceTranscript && !aiResponse && !isProcessingVoice && !voiceError && !recordingError && (
+                    {!voiceTranscript && !aiResponse && isRecording && !isProcessingVoice && !voiceError && !recordingError && (
                       <View style={styles.chatBubblePlaceholder}>
-                        <Text style={styles.chatBubblePlaceholderText}>
-                          {isRecording ? "Speak now..." : "Ready to listen..."}
-                        </Text>
+                        <Text style={styles.chatBubblePlaceholderText}>Listening... tap orb again to send</Text>
                       </View>
                     )}
 
@@ -1912,20 +1913,28 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
                   },
                 ]}
               >
-                <UnstableSiriOrb
-                  size={200}
-                  speed={isRecording ? 1.5 : isCreatingReminder ? 1.0 : 0.5}
-                  primaryColor={{ r: 0.18, g: 0.0, b: 1.0 }}
-                  secondaryColor={{ r: 1.0, g: 0.0, b: 0.01 }}
-                  paused={!isRecording && !isProcessingVoice && !isCreatingReminder}
-                />
+                <Pressable
+                  style={styles.voiceOrbPressable}
+                  onPress={() => {
+                    void handleOrbPress();
+                  }}
+                  disabled={isProcessingVoice || isCreatingReminder}
+                >
+                  <UnstableSiriOrb
+                    size={200}
+                    speed={isRecording ? 1.5 : isCreatingReminder ? 1.0 : 0.5}
+                    primaryColor={{ r: 0.18, g: 0.0, b: 1.0 }}
+                    secondaryColor={{ r: 1.0, g: 0.0, b: 0.01 }}
+                    paused={!isRecording && !isProcessingVoice && !isCreatingReminder}
+                  />
+                </Pressable>
               </Animated.View>
 
               {/* Recording Status */}
               {isRecording && !isCreatingReminder && (
                 <View style={styles.voiceControls}>
                   <View style={styles.voiceListeningIndicator}>
-                    <Text style={styles.voiceHint}>Listening... Speak now</Text>
+                    <Text style={styles.voiceHint}>Listening... tap orb again to finish</Text>
                   </View>
                 </View>
               )}
@@ -2629,7 +2638,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 24,
     paddingTop: 120,
-    paddingBottom: 60,
+    paddingBottom: 36,
   },
   voiceCloseButton: {
     position: 'absolute',
@@ -2666,18 +2675,30 @@ const styles = StyleSheet.create({
     fontFamily: 'BricolageGrotesque-Bold',
     color: '#2F00FF',
   },
+  voiceHeaderSubText: {
+    marginTop: 2,
+    fontSize: 13,
+    fontFamily: 'BricolageGrotesque-Regular',
+    color: 'rgba(47, 0, 255, 0.65)',
+  },
   voiceChatContainer: {
     flex: 1,
     width: '100%',
-    marginBottom: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.6)',
+    marginBottom: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.45)',
     borderRadius: 24,
     padding: 16,
     minHeight: 200,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.78)',
+  },
+  voiceMessagesScroll: {
+    flex: 1,
   },
   voiceChatContent: {
     gap: 16,
     flexGrow: 1,
+    paddingTop: 6,
   },
   chatBubblePlaceholder: {
     backgroundColor: 'rgba(255, 255, 255, 0.5)',
@@ -2773,7 +2794,13 @@ const styles = StyleSheet.create({
     height: 200,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 20,
+    marginBottom: 12,
+  },
+  voiceOrbPressable: {
+    width: 200,
+    height: 200,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   voiceControls: {
     alignItems: 'center',
@@ -2808,5 +2835,127 @@ const styles = StyleSheet.create({
   voiceListeningIndicator: {
     alignItems: 'center',
     paddingVertical: 12,
+  },
+  voiceComposer: {
+    width: '100%',
+    gap: 12,
+    marginBottom: 6,
+  },
+  voiceComposerInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  voiceComposerInputWrap: {
+    flex: 1,
+    height: 46,
+    borderRadius: 23,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.9)',
+    backgroundColor: 'rgba(255, 255, 255, 0.32)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  voiceComposerInputBlur: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  voiceComposerInputFallbackGlass: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255, 255, 255, 0.24)',
+  },
+  voiceComposerInput: {
+    flex: 1,
+    height: 46,
+    paddingHorizontal: 16,
+    backgroundColor: 'transparent',
+    color: '#1a1a2e',
+    fontFamily: 'BricolageGrotesque-Regular',
+    fontSize: 14,
+  },
+  voiceComposerSend: {
+    position: 'relative',
+    overflow: 'hidden',
+    height: 46,
+    minWidth: 68,
+    borderRadius: 23,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.92)',
+    backgroundColor: 'rgba(255, 255, 255, 0.34)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  voiceComposerSendText: {
+    color: '#2F00FF',
+    fontFamily: 'BricolageGrotesque-Bold',
+    fontSize: 13,
+    letterSpacing: 0.2,
+  },
+  voiceSuggestionGrid: {
+    width: '100%',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    rowGap: 10,
+  },
+  voiceSuggestionChip: {
+    position: 'relative',
+    overflow: 'hidden',
+    width: '32%',
+    paddingHorizontal: 10,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.92)',
+    backgroundColor: 'rgba(255, 255, 255, 0.34)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  voiceSuggestionChipDisabled: {
+    opacity: 0.55,
+  },
+  voiceSuggestionChipTiltLeft: {
+    transform: [{ rotate: '-5deg' }],
+  },
+  voiceSuggestionChipTiltRight: {
+    transform: [{ rotate: '4deg' }],
+  },
+  voiceSuggestionChipBlur: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  voiceSuggestionChipFallbackGlass: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255, 255, 255, 0.24)',
+  },
+  voiceSuggestionChipGloss: {
+    position: 'absolute',
+    top: 0,
+    left: 2,
+    right: 2,
+    height: 11,
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  voiceSuggestionChipText: {
+    textAlign: 'center',
+    fontSize: 12,
+    fontFamily: 'BricolageGrotesque-Medium',
+    color: '#2F00FF',
+    letterSpacing: 0.1,
   },
 });

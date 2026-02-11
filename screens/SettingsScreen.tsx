@@ -148,8 +148,7 @@ export default function SettingsScreen() {
       if (user?.email) {
         setUserEmail(user.email);
       }
-    } catch (error) {
-      console.error('Error loading settings data:', error);
+    } catch {
     } finally {
       setLoading(false);
     }
@@ -162,8 +161,7 @@ export default function SettingsScreen() {
         setPreferences(updated);
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
-    } catch (error) {
-      console.error('Error updating preference:', error);
+    } catch {
       Alert.alert('Error', 'Failed to update setting');
     }
   };
@@ -175,8 +173,7 @@ export default function SettingsScreen() {
         setPreferences(updated);
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
-    } catch (error) {
-      console.error('Error updating preference:', error);
+    } catch {
       Alert.alert('Error', 'Failed to update setting');
     }
   };
@@ -229,8 +226,7 @@ export default function SettingsScreen() {
       } else {
         Alert.alert('Error', 'Failed to generate code. Please try again.');
       }
-    } catch (error) {
-      console.error('Error generating code:', error);
+    } catch {
       Alert.alert('Error', 'An unexpected error occurred.');
     } finally {
       setCodeGenerating(false);

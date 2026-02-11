@@ -9,6 +9,7 @@ import {
   View,
   Animated,
   ActivityIndicator,
+  Easing,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -23,7 +24,7 @@ interface OnboardingScreenProps {
 
 const SLIDES = [
   {
-    title: 'Meet Remmy\nSet Reminders. Finish Tasks.',
+    title: 'Meet Remmy:\nSet Reminders. Finish Tasks.',
     image: require('../assets/zero.png'),
     isIntro: true,
   },
@@ -38,7 +39,7 @@ const SLIDES = [
     topImage: require('../assets/onetop.png'),
   },
   {
-    title: 'Your reminders, everywhere.',
+    title: 'Your reminders, everywhere',
     image: require('../assets/four.png'),
     topImage: require('../assets/onetop.png'),
   },
@@ -89,8 +90,8 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
   const [isAppleAuthAvailable] = useState(
     () => Platform.OS === 'ios' && appleAuth.isSupported
   );
-  const fadeAnim = useRef(new Animated.Value(1)).current;
-  const slideAnim = useRef(new Animated.Value(0)).current;
+  const contentFadeAnim = useRef(new Animated.Value(1)).current;
+  const contentSlideAnim = useRef(new Animated.Value(0)).current;
   const buttonScaleAnim = useRef(new Animated.Value(1)).current;
 
   // Sign-in page animations
@@ -105,6 +106,21 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
 
   const isSignInSlide = currentSlide === SLIDES.length;
   const totalSlides = SLIDES.length + 1; // +1 for sign-in slide
+  const slideDistance = 24;
+
+  useEffect(() => {
+    const sources = [
+      require('../assets/onboarding-bg.png'),
+      ...SLIDES.map((slide) => slide.image),
+      ...SLIDES.map((slide) => slide.topImage).filter(Boolean),
+    ];
+    sources.forEach((source) => {
+      const uri = Image.resolveAssetSource(source).uri;
+      if (uri) {
+        Image.prefetch(uri);
+      }
+    });
+  }, []);
 
   // Staggered entry animation for sign-in slide
   useEffect(() => {
@@ -149,37 +165,60 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
 
       // Animate out current slide
       Animated.parallel([
-        Animated.timing(fadeAnim, {
+        Animated.timing(contentFadeAnim, {
           toValue: 0,
-          duration: 250,
+          duration: 220,
+          easing: Easing.in(Easing.cubic),
           useNativeDriver: true,
         }),
-        Animated.spring(slideAnim, {
-          toValue: -30,
+        Animated.timing(contentSlideAnim, {
+          toValue: -slideDistance,
+          duration: 220,
+          easing: Easing.in(Easing.cubic),
           useNativeDriver: true,
-          tension: 180,
-          friction: 16,
         }),
       ]).start(() => {
-        setCurrentSlide(currentSlide + 1);
-        slideAnim.setValue(30);
+        setCurrentSlide((prev) => prev + 1);
+        contentSlideAnim.setValue(slideDistance);
 
         Animated.parallel([
-          Animated.spring(fadeAnim, {
+          Animated.timing(contentFadeAnim, {
             toValue: 1,
+            duration: 320,
+            easing: Easing.out(Easing.cubic),
             useNativeDriver: true,
-            tension: 180,
-            friction: 16,
           }),
-          Animated.spring(slideAnim, {
+          Animated.timing(contentSlideAnim, {
             toValue: 0,
+            duration: 320,
+            easing: Easing.out(Easing.cubic),
             useNativeDriver: true,
-            tension: 180,
-            friction: 16,
           }),
         ]).start();
       });
     }
+  };
+
+  const handleSkip = () => {
+    if (currentSlide >= SLIDES.length) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    Animated.parallel([
+      Animated.timing(contentFadeAnim, {
+        toValue: 0,
+        duration: 180,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(contentSlideAnim, {
+        toValue: -slideDistance,
+        duration: 180,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setCurrentSlide(SLIDES.length);
+    });
   };
 
   const handleButtonPressIn = () => {
@@ -252,6 +291,7 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
           source={require('../assets/onboarding-bg.png')}
           style={[styles.pngBackground, { width, height }]}
           resizeMode="cover"
+          fadeDuration={0}
         />
 
         <Animated.View
@@ -259,8 +299,6 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
             styles.signInContainer,
             {
               paddingTop: height * 0.18,
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }],
             },
           ]}
         >
@@ -288,6 +326,7 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
               source={require('../assets/zero.png')}
               style={{ width: width * 0.3, height: width * 0.3 }}
               resizeMode="contain"
+              fadeDuration={0}
             />
           </Animated.View>
 
@@ -452,10 +491,6 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
   const isThirdSlide = currentSlide === 2;
   const isFourthSlide = currentSlide === 3;
   const hasTopImage = Boolean(slide.topImage);
-  const imageScale = fadeAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.96, 1],
-  });
   const defaultImageTop = slide.isIntro
     ? hasTopImage
       ? height * 0.32
@@ -472,7 +507,7 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
     ? height * 0.44
     : height * 0.38;
   const imageTop =
-    isSecondSlide ? height * 0.41 : isThirdSlide ? height * 0.38 : isFourthSlide ? height * 0.36 : defaultImageTop;
+    isSecondSlide ? height * 0.41 : isThirdSlide ? height * 0.335 : isFourthSlide ? height * 0.52 : defaultImageTop;
   const baseImageWidth = slide.isIntro
     ? width * 0.65
     : isSnoozeSlide
@@ -487,9 +522,10 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
     : isSyncSlide
     ? width * 0.65
     : width * 1.2;
-  const imageSizeScale = isThirdSlide ? 1.339 : 1;
+  const imageSizeScale = slide.isIntro ? 1.1 : isThirdSlide ? 1.339 * 1.03 * 1.015 : 1;
   const imageWidth = baseImageWidth * imageSizeScale;
   const imageHeight = baseImageHeight * imageSizeScale;
+  const introTitleLines = slide.isIntro ? slide.title.split('\n') : [];
 
   return (
     <View style={styles.container}>
@@ -497,6 +533,7 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
         source={require('../assets/onboarding-bg.png')}
         style={[styles.pngBackground, { width, height }]}
         resizeMode="cover"
+        fadeDuration={0}
       />
 
       {slide.topImage && (
@@ -507,8 +544,6 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
               top: height * 0.06,
               alignItems: 'flex-start',
               paddingLeft: (width - width * 0.987376) / 2 - width * 0.055,
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }],
             },
           ]}
         >
@@ -516,6 +551,7 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
             source={slide.topImage}
             style={[styles.oneImage, { width: width * 0.987376, height: width * 0.987376 }]}
             resizeMode="contain"
+            fadeDuration={0}
           />
         </Animated.View>
       )}
@@ -525,8 +561,8 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
           styles.oneImageWrap,
           {
             top: imageTop,
-            opacity: fadeAnim,
-            transform: [{ translateY: slideAnim }, { scale: imageScale }],
+            opacity: contentFadeAnim,
+            transform: [{ translateY: contentSlideAnim }],
           },
         ]}
       >
@@ -540,12 +576,13 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
             },
           ]}
           resizeMode="contain"
+          fadeDuration={0}
         />
       </Animated.View>
 
       <View style={[styles.skipWrap, { top: 52, right: 20 }]}>
         <Pressable
-          onPress={onSkip}
+          onPress={handleSkip}
           style={styles.skipButton}
           hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
         >
@@ -561,21 +598,35 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
                 left: 24,
                 right: 24,
                 top: height * 0.25 + width * 0.95 + 24,
-                opacity: fadeAnim,
-                transform: [{ translateY: slideAnim }, { scale: imageScale }],
+                opacity: contentFadeAnim,
+                transform: [{ translateY: contentSlideAnim }],
               }
             : {
                 left: 24,
                 right: 24,
                 bottom: 120,
-                opacity: fadeAnim,
-                transform: [{ translateY: slideAnim }, { scale: imageScale }],
+                opacity: contentFadeAnim,
+                transform: [{ translateY: contentSlideAnim }],
               },
         ]}
       >
-        <Text style={[styles.headline, slide.isIntro && { textAlign: 'center', fontSize: 24, lineHeight: 30 }]}>
-          {slide.title}
-        </Text>
+        {slide.isIntro ? (
+          <View style={styles.introHeadlineWrap}>
+            <Text style={[styles.headline, styles.introHeadline]}>{introTitleLines[0]}</Text>
+            <Text style={[styles.headline, styles.introHeadline, styles.introHeadlineSecondary]}>
+              {introTitleLines.slice(1).join(' ')}
+            </Text>
+          </View>
+        ) : (
+          <Text
+            style={styles.headline}
+            numberOfLines={isFourthSlide ? 1 : undefined}
+            adjustsFontSizeToFit={isFourthSlide}
+            minimumFontScale={0.9}
+          >
+            {slide.title}
+          </Text>
+        )}
         {!slide.isIntro && (
           <View style={styles.dotsRow}>
             {Array.from({ length: totalSlides }).map((_, index) => (
@@ -667,6 +718,17 @@ const styles = StyleSheet.create({
     fontSize: 28,
     lineHeight: 34,
     fontFamily: 'BricolageGrotesque-Bold',
+  },
+  introHeadlineWrap: {
+    alignItems: 'center',
+  },
+  introHeadline: {
+    textAlign: 'center',
+    fontSize: 24,
+    lineHeight: 30,
+  },
+  introHeadlineSecondary: {
+    marginTop: 2,
   },
   dotsRow: {
     flexDirection: 'row',

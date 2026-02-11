@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { CreateReminderInput, CreateRecurringRuleInput } from './types';
+import type { File as ExpoFile } from 'expo-file-system';
 
 interface ParseResult {
   title: string;
@@ -29,6 +30,29 @@ interface VoiceReminderResult {
 }
 
 export type VoiceProcessResult = VoiceConversationResult | VoiceReminderResult;
+
+function normalizeProcessedReminder(reminderData: any, fallbackDescription: string) {
+  const reminder: CreateReminderInput = {
+    title: reminderData?.title || 'Reminder',
+    scheduled_time: reminderData?.scheduled_time,
+    description: reminderData?.description || fallbackDescription,
+    is_priority: Boolean(reminderData?.is_priority),
+    notify_before_minutes: reminderData?.notify_before_minutes ?? 0,
+  };
+
+  let recurringRule: CreateRecurringRuleInput | null = null;
+  if (reminderData?.recurring_rule) {
+    const rule = reminderData.recurring_rule;
+    recurringRule = {
+      name: rule.name || 'Custom recurring',
+      frequency: rule.frequency || 1,
+      frequency_unit: rule.frequency_unit || 'days',
+      selected_days: rule.selected_days || [],
+    };
+  }
+
+  return { reminder, recurringRule };
+}
 
 function startOfDay(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
@@ -117,23 +141,76 @@ function buildTitle(text: string): string {
 }
 
 export async function parseReminderFromText(text: string): Promise<CreateReminderInput> {
-  const fallback = buildLocalParse(text);
+  try {
+    const result = await parseRemindersFromText(text);
+    if (result.type === 'reminder' && result.reminders.length > 0) {
+      return result.reminders[0].reminder;
+    }
+    return buildLocalParse(text);
+  } catch {
+    return buildLocalParse(text);
+  }
+}
+
+export async function parseRemindersFromText(text: string): Promise<VoiceProcessResult> {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    throw new Error('Please enter a reminder request');
+  }
+
+  const fallbackReminder = buildLocalParse(trimmed);
 
   try {
+    const timezoneOffset = new Date().getTimezoneOffset();
     const { data, error } = await supabase.functions.invoke('parse-reminder', {
-      body: { text },
+      body: {
+        text: trimmed,
+        current_time: new Date().toISOString(),
+        timezone_offset: timezoneOffset,
+      },
     });
 
     if (error) {
-      return fallback;
+      throw new Error(error.message || 'Failed to parse reminder text');
     }
 
+    if (!data || typeof data !== 'object') {
+      throw new Error('Invalid response from reminder parser');
+    }
+
+    if (data.type === 'conversation') {
+      const response = typeof data.response === 'string' ? data.response.trim() : '';
+      return {
+        type: 'conversation',
+        transcript: trimmed,
+        response: response || "I can create reminders for you. Try something like 'remind me to call mom at 7pm'.",
+      };
+    }
+
+    const remindersArray = data.reminders || (data.reminder ? [data.reminder] : null);
+    if (!Array.isArray(remindersArray) || remindersArray.length === 0) {
+      return {
+        type: 'reminder',
+        transcript: trimmed,
+        reminders: [{ reminder: fallbackReminder, recurringRule: null }],
+      };
+    }
+
+    const processedReminders = remindersArray.map((reminderData: any) =>
+      normalizeProcessedReminder(reminderData, trimmed)
+    );
+
     return {
-      ...fallback,
-      ...data,
-    } as CreateReminderInput;
+      type: 'reminder',
+      transcript: trimmed,
+      reminders: processedReminders,
+    };
   } catch {
-    return fallback;
+    return {
+      type: 'reminder',
+      transcript: trimmed,
+      reminders: [{ reminder: fallbackReminder, recurringRule: null }],
+    };
   }
 }
 
@@ -168,7 +245,7 @@ function buildLocalParse(text: string): CreateReminderInput {
 }
 
 export async function parseReminderFromVoice(
-  audioBase64: string,
+  audioFile: ExpoFile,
   mimeType: string
 ): Promise<VoiceProcessResult> {
   try {
@@ -182,14 +259,20 @@ export async function parseReminderFromVoice(
     // Get user's timezone offset in minutes
     const timezoneOffset = new Date().getTimezoneOffset();
 
+    const audioBytes = await audioFile.bytes();
+    const body = audioBytes.buffer.slice(
+      audioBytes.byteOffset,
+      audioBytes.byteOffset + audioBytes.byteLength
+    );
+    const fileName = audioFile?.name || 'audio.m4a';
+
     const { data, error } = await supabase.functions.invoke('voice-to-reminder', {
-      body: {
-        audio: audioBase64,
-        mimeType,
-        timezoneOffset, // Send user's timezone offset
-      },
+      body,
       headers: {
         Authorization: `Bearer ${session.access_token}`,
+        'x-audio-mime': mimeType,
+        'x-audio-name': fileName,
+        'x-timezone-offset': String(timezoneOffset),
       },
     });
 
@@ -221,30 +304,9 @@ export async function parseReminderFromVoice(
       throw new Error('Invalid reminder response from voice processing');
     }
 
-    // Process each reminder
-    const processedReminders = remindersArray.map((reminderData: any) => {
-      const reminder: CreateReminderInput = {
-        title: reminderData.title || 'Reminder',
-        scheduled_time: reminderData.scheduled_time,
-        description: reminderData.description || data.transcript,
-        is_priority: reminderData.is_priority || false,
-        notify_before_minutes: reminderData.notify_before_minutes ?? 0,
-      };
-
-      // Parse recurring rule if present
-      let recurringRule: CreateRecurringRuleInput | null = null;
-      if (reminderData.recurring_rule) {
-        const rule = reminderData.recurring_rule;
-        recurringRule = {
-          name: rule.name || 'Custom recurring',
-          frequency: rule.frequency || 1,
-          frequency_unit: rule.frequency_unit || 'days',
-          selected_days: rule.selected_days || [],
-        };
-      }
-
-      return { reminder, recurringRule };
-    });
+    const processedReminders = remindersArray.map((reminderData: any) =>
+      normalizeProcessedReminder(reminderData, data.transcript)
+    );
 
     return {
       type: 'reminder',

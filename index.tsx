@@ -14,10 +14,8 @@ const BACKGROUND_NOTIFICATION_TASK = 'REMINDER-NOTIFICATION-TASK';
 // Background task temporarily disabled for debugging
 // TaskManager.defineTask(BACKGROUND_NOTIFICATION_TASK, async ({ data, error }) => {
 //   if (error) {
-//     console.error('Background notification task error:', error);
 //     return;
 //   }
-//   console.log('Background notification task triggered with data:', data);
 
 //   const payload = data as { notification?: { request?: { content?: { data?: Record<string, unknown> } } } } | undefined;
 //   const contentData = payload?.notification?.request?.content?.data;
@@ -29,7 +27,6 @@ const BACKGROUND_NOTIFICATION_TASK = 'REMINDER-NOTIFICATION-TASK';
 // });
 
 // Notifications.registerTaskAsync(BACKGROUND_NOTIFICATION_TASK).catch((error) => {
-//   console.error('Failed to register background notification task:', error);
 // });
 
 function Root() {
