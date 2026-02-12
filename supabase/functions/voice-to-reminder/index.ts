@@ -256,19 +256,24 @@ async function parseReminderFromTranscript(transcript: string, apiKey: string, t
     const offsetSign = timezoneOffset <= 0 ? '+' : '-';
     const timezone = `${offsetSign}${String(offsetHours).padStart(2, '0')}:${String(offsetMinutes).padStart(2, '0')}`;
 
-    const systemPrompt = `Convert voice input to reminder JSON.
+    const currentDate = `${localTime.getFullYear()}-${String(localTime.getMonth() + 1).padStart(2, '0')}-${String(localTime.getDate()).padStart(2, '0')}`;
+    const tomorrowDate = `${localTime.getFullYear()}-${String(localTime.getMonth() + 1).padStart(2, '0')}-${String(localTime.getDate() + 1).padStart(2, '0')}`;
 
-TIMEZONE: ${timezone}
-CURRENT TIME: ${localTime.toISOString().slice(0, 19)}${timezone}
-CURRENT DATE: ${localTime.getFullYear()}-${String(localTime.getMonth() + 1).padStart(2, '0')}-${String(localTime.getDate()).padStart(2, '0')}
+    const systemPrompt = `You are a reminder extraction engine. Parse the user's voice transcript into one or MORE reminders.
 
-OUTPUT - Array of reminders:
+CONTEXT:
+- TIMEZONE: ${timezone}
+- CURRENT_TIME: ${localTime.toISOString().slice(0, 19)}${timezone}
+- CURRENT_DATE: ${currentDate}
+- DAY_OF_WEEK: ${['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][localTime.getDay()]}
+
+OUTPUT FORMAT (always return a JSON object with a "reminders" array):
 {
   "reminders": [
     {
-      "title": "Brief action (2-6 words max)",
+      "title": "Brief action (2-6 words)",
       "scheduled_time": "YYYY-MM-DDTHH:mm:ss${timezone}",
-      "description": "Short note with context (5-15 words). ALWAYS create a note - never leave null",
+      "description": "Short context note (5-15 words). Never null.",
       "is_priority": false,
       "notify_before_minutes": 0,
       "recurring_rule": null
@@ -276,29 +281,39 @@ OUTPUT - Array of reminders:
   ]
 }
 
-CRITICAL RULES:
-1. title = SHORT action (e.g., "Call mom", "Buy groceries")
-2. description = SHORT contextual note (e.g., "Check in about her appointment", "Get milk, bread, and eggs for dinner")
-3. ALWAYS create description - extract key context from user's words
-4. description should add useful context, NOT repeat the title
-5. scheduled_time ALWAYS uses ${timezone}
+CRITICAL - MULTIPLE REMINDERS:
+Users often describe their ENTIRE DAY or MULTIPLE TASKS in one recording. You MUST split each distinct task/event into its OWN reminder. Look for:
+- Separate activities ("then", "and then", "also", "after that", "next")
+- Different times mentioned ("at 9am... at noon... at 3pm")
+- Different topics/actions ("call mom", "buy groceries", "go to gym")
+- Transition words ("first... then... later... finally...")
+- Lists of tasks ("I need to do X, Y, and Z")
+
+Example: "Tomorrow I have a meeting at 9am with the design team, then lunch with Sarah at noon, I need to pick up my dry cleaning around 3, and don't forget to call the dentist before 5pm"
+→ 4 separate reminders, each with its own time and context.
+
+TITLE RULES:
+- 2-6 words, action-focused
+- e.g., "Call Mom", "Team Meeting", "Pick Up Dry Cleaning"
+
+DESCRIPTION RULES:
+- 5-15 words of useful context extracted from what the user said
+- Add detail that isn't in the title
+- Never leave null or empty
 
 TIME RULES:
-- "today" = day ${String(localTime.getDate()).padStart(2, '0')}
-- "tomorrow" = day ${String(localTime.getDate() + 1).padStart(2, '0')}
-- "7pm" = 19:00:00
-- Format: ${localTime.getFullYear()}-MM-DDT19:00:00${timezone}
+- "today" = ${currentDate}
+- "tomorrow" = ${tomorrowDate}
+- If no time specified for a task, infer a reasonable time based on context
+- If no time can be inferred, default to 30 minutes from now
+- scheduled_time MUST include timezone: ${timezone}
 
-EXAMPLES:
-"remind me to call mom tomorrow at 7pm to ask about her doctor appointment"
-→ { "title": "Call mom", "description": "Ask about doctor appointment", "scheduled_time": "${localTime.getFullYear()}-${String(localTime.getMonth() + 1).padStart(2, '0')}-${String(localTime.getDate() + 1).padStart(2, '0')}T19:00:00${timezone}" }
+RECURRING RULES (when applicable):
+- "every day/daily" → { "name": "Daily", "frequency": 1, "frequency_unit": "days", "selected_days": [] }
+- "every week/weekly" → { "name": "Weekly", "frequency": 1, "frequency_unit": "weeks", "selected_days": [] }
+- "every Monday and Wednesday" → { "name": "Mon & Wed", "frequency": 1, "frequency_unit": "weeks", "selected_days": ["monday","wednesday"] }
 
-"buy groceries at 3pm - need milk and bread"
-→ { "title": "Buy groceries", "description": "Get milk and bread", "scheduled_time": "${localTime.getFullYear()}-${String(localTime.getMonth() + 1).padStart(2, '0')}-${String(localTime.getDate()).padStart(2, '0')}T15:00:00${timezone}" }
-
-MULTIPLE: "call mom and buy groceries" = 2 separate reminders
-
-Return JSON only.`;
+Return ONLY valid JSON, no markdown.`;
 
     const response = await fetch(`${OPENAI_API_URL}/chat/completions`, {
       method: 'POST',
@@ -307,7 +322,7 @@ Return JSON only.`;
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'gpt-4o',
         temperature: 0.2,
         messages: [
           { role: 'system', content: systemPrompt },

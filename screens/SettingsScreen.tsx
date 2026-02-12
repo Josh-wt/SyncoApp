@@ -1,6 +1,6 @@
 import '../global.css';
 import { useEffect, useRef, useState } from 'react';
-import { Alert, ScrollView, Text, View, Pressable, Switch, ActivityIndicator, TextInput, Animated } from 'react-native';
+import { Alert, ScrollView, Text, View, Pressable, Switch, ActivityIndicator, Animated } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -116,7 +116,6 @@ export default function SettingsScreen() {
   const [todayCount, setTodayCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [showPaywall, setShowPaywall] = useState(false);
-  const [newTemplate, setNewTemplate] = useState('');
   const [codeGenerating, setCodeGenerating] = useState(false);
   const [codeCopied, setCodeCopied] = useState(false);
 
@@ -191,27 +190,6 @@ export default function SettingsScreen() {
       updated = [...current, minutes].sort((a, b) => a - b);
     }
     handleUpdatePreference({ snooze_preset_values: updated });
-  };
-
-  const handleAddTemplate = () => {
-    const trimmed = newTemplate.trim();
-    if (!trimmed) return;
-    const current = preferences?.quick_reminder_templates ?? [];
-    if (current.includes(trimmed)) {
-      Alert.alert('Duplicate', 'This template already exists');
-      return;
-    }
-    if (current.length >= 10) {
-      Alert.alert('Limit Reached', 'Maximum 10 quick templates allowed');
-      return;
-    }
-    handleUpdatePreference({ quick_reminder_templates: [...current, trimmed] });
-    setNewTemplate('');
-  };
-
-  const handleRemoveTemplate = (template: string) => {
-    const current = preferences?.quick_reminder_templates ?? [];
-    handleUpdatePreference({ quick_reminder_templates: current.filter(t => t !== template) });
   };
 
   const handleGenerateCode = async () => {
@@ -685,91 +663,6 @@ export default function SettingsScreen() {
               </View>
             </View>
           </View>
-        </AnimatedSection>
-
-        {/* Quick Reminder Templates */}
-        <AnimatedSection delay={240}>
-          <View className="bg-white rounded-[40px] p-8 shadow-lg mb-5">
-            <View className="flex-row items-center justify-between mb-6">
-              <Text className="text-xl font-normal text-gray-800" style={{ fontFamily: 'BricolageGrotesque-Regular' }}>
-                Quick Templates
-              </Text>
-              <MaterialIcons name="text-snippet" size={24} color="#9ca3af" />
-            </View>
-
-            <Text className="text-xs text-gray-400 mb-4" style={{ fontFamily: 'BricolageGrotesque-Regular' }}>
-              Save frequent reminder titles for quick creation
-            </Text>
-
-            {/* Existing Templates */}
-            {(preferences?.quick_reminder_templates ?? []).length > 0 && (
-              <View className="gap-2 mb-4">
-                {(preferences?.quick_reminder_templates ?? []).map((template, index) => (
-                  <View key={index} className="flex-row items-center bg-gray-50 rounded-2xl px-4 py-3">
-                    <MaterialIcons name="bookmark" size={16} color="#2f00ff" />
-                    <Text className="flex-1 ml-3 text-sm text-gray-700" style={{ fontFamily: 'BricolageGrotesque-Regular' }}>
-                      {template}
-                    </Text>
-                    <Pressable
-                      onPress={() => handleRemoveTemplate(template)}
-                      hitSlop={8}
-                    >
-                      <MaterialIcons name="close" size={18} color="#9ca3af" />
-                    </Pressable>
-                  </View>
-                ))}
-              </View>
-            )}
-
-            {/* Add New Template */}
-            <View className="flex-row items-center gap-3">
-              <TextInput
-                value={newTemplate}
-                onChangeText={setNewTemplate}
-                placeholder="e.g. Take medication"
-                placeholderTextColor="#9ca3af"
-                className="flex-1 bg-gray-50 rounded-2xl px-4 py-3 text-sm text-gray-700"
-                style={{ fontFamily: 'BricolageGrotesque-Regular' }}
-                onSubmitEditing={handleAddTemplate}
-                returnKeyType="done"
-              />
-              <Pressable
-                onPress={handleAddTemplate}
-                className={`w-10 h-10 rounded-full items-center justify-center ${newTemplate.trim() ? 'bg-[#2f00ff]' : 'bg-gray-200'}`}
-                disabled={!newTemplate.trim()}
-              >
-                <MaterialIcons name="add" size={20} color={newTemplate.trim() ? '#ffffff' : '#9ca3af'} />
-              </Pressable>
-            </View>
-          </View>
-        </AnimatedSection>
-
-        {/* Test Notification Button */}
-        <AnimatedSection delay={310}>
-          <AnimatedPressable
-            onPress={async () => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              const { sendTestNotification } = await import('../lib/notifications');
-              await sendTestNotification();
-              Alert.alert('Test Notification', 'A test notification will arrive in 5 seconds.');
-            }}
-            className="bg-white rounded-[40px] p-6 shadow-lg flex-row items-center justify-between"
-          >
-            <View className="flex-row items-center gap-4">
-              <View className="w-12 h-12 rounded-full bg-blue-50 items-center justify-center">
-                <MaterialIcons name="notifications-active" size={24} color="#3b82f6" />
-              </View>
-              <View>
-                <Text className="text-lg font-medium" style={{ fontFamily: 'BricolageGrotesque-Medium' }}>
-                  Test Notification
-                </Text>
-                <Text className="text-sm text-gray-400" style={{ fontFamily: 'BricolageGrotesque-Regular' }}>
-                  Send a test notification in 5 seconds
-                </Text>
-              </View>
-            </View>
-            <MaterialIcons name="chevron-right" size={24} color="#d1d5db" />
-          </AnimatedPressable>
         </AnimatedSection>
 
         {/* Sign Out Button */}

@@ -2,18 +2,6 @@ import { supabase } from './supabase';
 import { CreateReminderInput, CreateRecurringRuleInput } from './types';
 import type { File as ExpoFile } from 'expo-file-system';
 
-interface ParseResult {
-  title: string;
-  scheduled_time: string;
-  description?: string;
-}
-
-interface VoiceParseResult {
-  transcript: string;
-  reminder: CreateReminderInput;
-  recurringRule: CreateRecurringRuleInput | null;
-}
-
 interface VoiceConversationResult {
   type: 'conversation';
   transcript: string;
@@ -31,11 +19,106 @@ interface VoiceReminderResult {
 
 export type VoiceProcessResult = VoiceConversationResult | VoiceReminderResult;
 
-function normalizeProcessedReminder(reminderData: any, fallbackDescription: string) {
+const TITLE_STOP_WORDS = new Set([
+  'a', 'an', 'and', 'at', 'be', 'by', 'for', 'from', 'i', 'in', 'is', 'it', 'me', 'my', 'of',
+  'on', 'please', 'remind', 'reminder', 'set', 'the', 'this', 'to', 'with', 'you', 'your',
+]);
+
+function normalizeWhitespace(text: string): string {
+  return text.replace(/\s+/g, ' ').trim();
+}
+
+function stripReminderLanguage(text: string): string {
+  return normalizeWhitespace(
+    text
+      .replace(/\b(remind me( to)?|set (a )?reminder( to)?|don't forget( to)?|can you remind me( to)?|please)\b/gi, ' ')
+      .replace(/\b(today|tonight|tomorrow|tmr|this morning|this afternoon|this evening|next week|next month|next year)\b/gi, ' ')
+      .replace(/\b(at|on|by)\s+\d{1,2}(:\d{2})?\s*(am|pm)?\b/gi, ' ')
+      .replace(/\b(in)\s+\d+\s+(minute|minutes|hour|hours|day|days|week|weeks|month|months|year|years)\b/gi, ' ')
+      .replace(/\b(every)\s+\d*\s*(hour|hours|day|days|week|weeks|month|months|year|years)\b/gi, ' ')
+      .replace(/[.,!?;:()]/g, ' ')
+  );
+}
+
+function extractWords(text: string): string[] {
+  return text.match(/[A-Za-z0-9']+/g) ?? [];
+}
+
+function toTitleCase(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/\b\w/g, (match) => match.toUpperCase());
+}
+
+function trimToWordRange(text: string, minWords: number, maxWords: number, fallback: string): string {
+  const sourceWords = extractWords(text);
+  const fallbackWords = extractWords(fallback);
+  const words = sourceWords.slice(0, maxWords);
+
+  let fallbackIndex = 0;
+  while (words.length < minWords && fallbackIndex < fallbackWords.length) {
+    words.push(fallbackWords[fallbackIndex]);
+    fallbackIndex += 1;
+  }
+
+  while (words.length < minWords) {
+    words.push('Reminder');
+  }
+
+  return words.slice(0, maxWords).join(' ');
+}
+
+function buildReminderTitle(modelTitle: unknown, sourceText: string): string {
+  const titleCandidate = typeof modelTitle === 'string' ? modelTitle : '';
+  const cleanedTitle = stripReminderLanguage(titleCandidate);
+  const cleanedSource = stripReminderLanguage(sourceText);
+
+  const titleWords = extractWords(cleanedTitle).filter((word) => !TITLE_STOP_WORDS.has(word.toLowerCase()));
+  const sourceWords = extractWords(cleanedSource).filter((word) => !TITLE_STOP_WORDS.has(word.toLowerCase()));
+
+  const prioritizedWords = titleWords.length > 0 ? titleWords : sourceWords;
+  const backupWords = extractWords(cleanedTitle || cleanedSource);
+  const fallbackWords = extractWords(sourceText).filter((word) => !TITLE_STOP_WORDS.has(word.toLowerCase()));
+
+  const mergedWords = prioritizedWords.length > 0 ? prioritizedWords : (backupWords.length > 0 ? backupWords : fallbackWords);
+  const mergedText = mergedWords.join(' ');
+  const clamped = trimToWordRange(mergedText, 3, 6, 'Task Reminder');
+
+  return toTitleCase(clamped);
+}
+
+function buildReminderNotes(modelDescription: unknown, sourceText: string, title: string): string {
+  const descriptionCandidate = typeof modelDescription === 'string' ? modelDescription : '';
+  const titleWords = new Set(extractWords(title).map((word) => word.toLowerCase()));
+
+  const noteSource = stripReminderLanguage(descriptionCandidate) || stripReminderLanguage(sourceText);
+  const filteredWords = extractWords(noteSource).filter((word) => !titleWords.has(word.toLowerCase()));
+  const fallbackDetailWords = extractWords(stripReminderLanguage(sourceText)).filter(
+    (word) => !titleWords.has(word.toLowerCase())
+  );
+
+  const candidate = filteredWords.join(' ');
+  const fallback = fallbackDetailWords.length > 0
+    ? fallbackDetailWords.join(' ')
+    : 'Include key details and relevant context';
+  const clamped = trimToWordRange(candidate, 5, 8, fallback || 'Include key details and relevant context');
+
+  const sentence = normalizeWhitespace(clamped);
+  if (!sentence) {
+    return 'Include key details and relevant context';
+  }
+
+  return sentence.charAt(0).toUpperCase() + sentence.slice(1);
+}
+
+function normalizeProcessedReminder(reminderData: any, sourceText: string) {
+  const title = buildReminderTitle(reminderData?.title, sourceText);
+  const description = buildReminderNotes(reminderData?.description, sourceText, title);
+
   const reminder: CreateReminderInput = {
-    title: reminderData?.title || 'Reminder',
+    title,
     scheduled_time: reminderData?.scheduled_time,
-    description: reminderData?.description || fallbackDescription,
+    description,
     is_priority: Boolean(reminderData?.is_priority),
     notify_before_minutes: reminderData?.notify_before_minutes ?? 0,
   };
@@ -127,19 +210,6 @@ function parseRecurring(text: string): { frequency: number; unit: 'days' | 'week
   return null;
 }
 
-function buildTitle(text: string): string {
-  const cleaned = text
-    .replace(/remind me to/i, '')
-    .replace(/please/i, '')
-    .replace(/\bat\b\s*\d{1,2}(:\d{2})?\s*(am|pm)?/gi, '')
-    .replace(/\b(on|next|this)\b\s+[a-z]+/gi, '')
-    .replace(/\b(today|tomorrow)\b/gi, '')
-    .replace(/\bevery\b\s+[a-z]+/gi, '')
-    .trim();
-
-  return cleaned.length > 0 ? cleaned : 'Reminder';
-}
-
 export async function parseReminderFromText(text: string): Promise<CreateReminderInput> {
   try {
     const result = await parseRemindersFromText(text);
@@ -226,20 +296,21 @@ function buildLocalParse(text: string): CreateReminderInput {
     scheduled.setDate(scheduled.getDate() + 1);
   }
 
-  const title = buildTitle(text);
+  const title = buildReminderTitle('', text);
   const recurring = parseRecurring(text);
+
+  const baseDescription = recurring
+    ? `${text} Recurs every ${recurring.frequency} ${recurring.unit}.`
+    : text;
+  const description = buildReminderNotes('', baseDescription, title);
 
   const input: CreateReminderInput = {
     title,
-    description: text,
+    description,
     scheduled_time: scheduled.toISOString(),
     notify_before_minutes: 0,
     is_priority: text.toLowerCase().includes('priority'),
   };
-
-  if (recurring) {
-    input.description = `${text} (recurs every ${recurring.frequency} ${recurring.unit})`;
-  }
 
   return input;
 }

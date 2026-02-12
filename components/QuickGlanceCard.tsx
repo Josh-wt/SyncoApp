@@ -99,7 +99,7 @@ export default function QuickGlanceCard({ onGiftPress }: QuickGlanceCardProps) {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
-          // Try to get name from user metadata (Google/Apple sign-in)
+          // Try to get name from user metadata (Google/email sign-in)
           const fullName = user.user_metadata?.full_name || user.user_metadata?.name;
           if (fullName) {
             // Use first name only

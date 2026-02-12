@@ -1,7 +1,6 @@
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
-import { Platform } from 'react-native';
-import appleAuth from '@invertase/react-native-apple-authentication';
+import type { EmailOtpType } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 
 const redirectUri = AuthSession.makeRedirectUri({
@@ -21,6 +20,43 @@ function getCallbackParams(callbackUrl: string): {
     queryParams: new URLSearchParams(url.search),
     hashParams: new URLSearchParams(url.hash.startsWith('#') ? url.hash.slice(1) : url.hash),
   };
+}
+
+function isEmailOtpType(value: string): value is EmailOtpType {
+  return ['signup', 'invite', 'magiclink', 'recovery', 'email_change', 'email'].includes(value);
+}
+
+async function completeCallbackOnce(
+  callbackKey: string,
+  completionFactory: () => Promise<boolean>
+): Promise<boolean> {
+  if (completedAuthCallbacks.has(callbackKey)) {
+    return true;
+  }
+
+  const existingCompletion = inFlightAuthCallbacks.get(callbackKey);
+  if (existingCompletion) {
+    return existingCompletion;
+  }
+
+  const completion = completionFactory();
+  inFlightAuthCallbacks.set(callbackKey, completion);
+
+  try {
+    const handled = await completion;
+    if (handled) {
+      completedAuthCallbacks.add(callbackKey);
+      if (completedAuthCallbacks.size > 20) {
+        const oldestKey = completedAuthCallbacks.values().next().value;
+        if (oldestKey) {
+          completedAuthCallbacks.delete(oldestKey);
+        }
+      }
+    }
+    return handled;
+  } finally {
+    inFlightAuthCallbacks.delete(callbackKey);
+  }
 }
 
 export async function completeAuthFromUrl(callbackUrl: string | null | undefined): Promise<boolean> {
@@ -46,22 +82,13 @@ export async function completeAuthFromUrl(callbackUrl: string | null | undefined
   }
 
   const authCode = queryParams.get('code') || hashParams.get('code');
+  const tokenHash = queryParams.get('token_hash') || hashParams.get('token_hash');
+  const otpType = queryParams.get('type') || hashParams.get('type');
   const accessToken = hashParams.get('access_token') || queryParams.get('access_token');
   const refreshToken = hashParams.get('refresh_token') || queryParams.get('refresh_token');
 
   if (authCode) {
-    const callbackKey = `code:${authCode}`;
-
-    if (completedAuthCallbacks.has(callbackKey)) {
-      return true;
-    }
-
-    const existingCompletion = inFlightAuthCallbacks.get(callbackKey);
-    if (existingCompletion) {
-      return existingCompletion;
-    }
-
-    const completion = (async (): Promise<boolean> => {
+    return completeCallbackOnce(`code:${authCode}`, async (): Promise<boolean> => {
       const { error } = await supabase.auth.exchangeCodeForSession(authCode);
       if (error) {
         // Another callback handler may have already exchanged this code.
@@ -72,25 +99,28 @@ export async function completeAuthFromUrl(callbackUrl: string | null | undefined
         throw error;
       }
       return true;
-    })();
+    });
+  }
 
-    inFlightAuthCallbacks.set(callbackKey, completion);
-
-    try {
-      const handled = await completion;
-      if (handled) {
-        completedAuthCallbacks.add(callbackKey);
-        if (completedAuthCallbacks.size > 20) {
-          const oldestKey = completedAuthCallbacks.values().next().value;
-          if (oldestKey) {
-            completedAuthCallbacks.delete(oldestKey);
+  if (tokenHash && otpType && isEmailOtpType(otpType)) {
+    return completeCallbackOnce(
+      `otp:${otpType}:${tokenHash}`,
+      async (): Promise<boolean> => {
+        const { error } = await supabase.auth.verifyOtp({
+          token_hash: tokenHash,
+          type: otpType,
+        });
+        if (error) {
+          // Another callback handler may have already consumed this token hash.
+          const { data: existingSession } = await supabase.auth.getSession();
+          if (existingSession.session) {
+            return true;
           }
+          throw error;
         }
+        return true;
       }
-      return handled;
-    } finally {
-      inFlightAuthCallbacks.delete(callbackKey);
-    }
+    );
   }
 
   if (accessToken && refreshToken) {
@@ -150,93 +180,29 @@ export async function signInWithGoogle() {
   return null;
 }
 
-export async function signInWithApple() {
-  try {
-    console.log('🍎 [Apple Auth] Starting Apple sign-in flow');
+function isValidEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
 
-    if (!appleAuth.isSupported) {
-      console.error('🔴 [Apple Auth] Apple Sign In is not supported on this device');
-      throw new Error('Apple Sign In is not supported on this device');
-    }
+export async function signInWithEmail(email: string) {
+  const normalizedEmail = email.trim().toLowerCase();
+  if (!isValidEmail(normalizedEmail)) {
+    throw new Error('Please enter a valid email address');
+  }
 
-    const credential = await appleAuth.performRequest({
-      requestedOperation: appleAuth.Operation.LOGIN,
-      requestedScopes: [appleAuth.Scope.FULL_NAME, appleAuth.Scope.EMAIL],
-      nonceEnabled: true,
-    });
+  const { error } = await supabase.auth.signInWithOtp({
+    email: normalizedEmail,
+    options: {
+      emailRedirectTo: redirectUri,
+      shouldCreateUser: true,
+    },
+  });
 
-    const nonce =
-      typeof credential.nonce === 'string' && credential.nonce.length > 0
-        ? credential.nonce
-        : undefined;
-
-    console.log('🍎 [Apple Auth] Credential received:', {
-      hasToken: !!credential.identityToken,
-      hasNonce: !!nonce,
-      email: credential.email,
-      user: credential.user,
-      fullName: credential.fullName
-    });
-
-    if (!credential.identityToken) {
-      console.error('🔴 [Apple Auth] No identity token returned from Apple');
-      throw new Error('No identity token returned from Apple');
-    }
-
-    console.log('🍎 [Apple Auth] Sending identity token to Supabase');
-    const { data, error } = await supabase.auth.signInWithIdToken({
-      provider: 'apple',
-      token: credential.identityToken,
-      ...(nonce ? { nonce } : {}),
-    });
-
-    if (error) {
-      console.error('🔴 [Apple Auth] Supabase sign-in error:', error);
-      throw error;
-    }
-
-    console.log('✅ [Apple Auth] Sign-in successful:', {
-      hasSession: !!data.session,
-      hasUser: !!data.user,
-      userId: data.user?.id,
-      userEmail: data.user?.email
-    });
-
-    // Session is automatically set by signInWithIdToken, no need to set it again
-    return data;
-  } catch (error) {
-    if (
-      error &&
-      typeof error === 'object' &&
-      'code' in error &&
-      error.code === appleAuth.Error.CANCELED
-    ) {
-      // User canceled the sign-in
-      console.log('⚠️ [Apple Auth] Sign-in canceled by user');
-      return null;
-    }
-
-    if (
-      error &&
-      typeof error === 'object' &&
-      'code' in error &&
-      error.code === appleAuth.Error.UNKNOWN
-    ) {
-      const platformHint =
-        Platform.OS === 'ios'
-          ? 'If testing on Simulator, try a real device or remove Simulator from your Apple ID devices list.'
-          : '';
-      const setupHint =
-        'Verify Sign in with Apple is enabled for your App ID (com.syncoapp.app) and rebuild so the provisioning profile includes that capability.';
-      console.error('🔴 [Apple Auth] ASAuthorizationError 1000 details:', error);
-      throw new Error(
-        `Apple Sign In failed (ASAuthorizationError 1000). ${setupHint} ${platformHint}`.trim()
-      );
-    }
-
-    console.error('🔴 [Apple Auth] Unexpected error:', error);
+  if (error) {
     throw error;
   }
+
+  return { email: normalizedEmail };
 }
 
 export async function signOut() {

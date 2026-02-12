@@ -6,7 +6,6 @@
       "name": "synco",
       "dependencies": {
         "@expo/vector-icons": "^15.0.3",
-        "@invertase/react-native-apple-authentication": "^2.5.1",
         "@react-native-async-storage/async-storage": "^2.2.0",
         "@react-native-community/blur": "^4.4.1",
         "@react-native-community/slider": "^5.1.2",
@@ -49,7 +48,7 @@
         "react-native-url-polyfill": "^3.0.0",
         "react-native-web": "^0.21.0",
         "react-native-worklets": "0.5.1",
-        "tailwindcss": "^3.4.19",
+        "tailwindcss": "^3.4.19"  
       },
       "devDependencies": {
         "@types/react": "~19.1.10",
@@ -301,8 +300,6 @@
     "@expo/xcpretty": ["@expo/xcpretty@4.4.0", "", { "dependencies": { "@babel/code-frame": "^7.20.0", "chalk": "^4.1.0", "js-yaml": "^4.1.0" }, "bin": { "excpretty": "build/cli.js" } }, "sha512-o2qDlTqJ606h4xR36H2zWTywmZ3v3842K6TU8Ik2n1mfW0S580VHlt3eItVYdLYz+klaPp7CXqanja8eASZjRw=="],
 
     "@ide/backoff": ["@ide/backoff@1.0.0", "", {}, "sha512-F0YfUDjvT+Mtt/R4xdl2X0EYCHMMiJqNLdxHD++jDT5ydEFIyqbCHh51Qx2E211dgZprPKhV7sHmnXKpLuvc5g=="],
-
-    "@invertase/react-native-apple-authentication": ["@invertase/react-native-apple-authentication@2.5.1", "", {}, "sha512-KPKKc0wtRYpH4J0RkDfHzoKSZ+dYPEHmCXhpPdgHsT2MbK5AIkW1cYurjhAgev/kL7nOHFmWITjY1At5WhFEMQ=="],
 
     "@isaacs/balanced-match": ["@isaacs/balanced-match@4.0.1", "", {}, "sha512-yzMTt9lEb8Gv7zRioUilSglI0c0smZ9k5D65677DLWLtWJaXIS3CqcGyUFByYKlnUj6TkjLVs54fBl6+TiGQDQ=="],
 

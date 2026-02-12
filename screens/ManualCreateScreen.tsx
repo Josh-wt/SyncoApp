@@ -4,6 +4,7 @@ import {
   Animated,
   Dimensions,
   FlatList,
+  Image,
   Keyboard,
   KeyboardAvoidingView,
   NativeScrollEvent,
@@ -605,6 +606,7 @@ function DateTimePicker({
           data={dates}
           renderItem={renderDateItem}
           keyExtractor={(item) => item.toISOString()}
+          style={styles.dateList}
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.dateListContent}
@@ -1073,13 +1075,13 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }, [ensureMicrophonePermission, handleStopVoice, isCreatingReminder, isProcessingVoice, isRecording, startRecording]);
 
-  // Auto-stop recording after duration (simulates silence detection)
+  // Auto-stop recording after max duration (safety limit)
   useEffect(() => {
     if (isRecording && isVoiceMode && !isProcessingVoice) {
-      // Auto-stop after 10 seconds of recording
+      // Auto-stop after 120 seconds (2 minutes) - generous limit for describing a full day
       autoStopTimerRef.current = setTimeout(() => {
         handleStopVoice();
-      }, 10000);
+      }, 120000);
 
       return () => {
         if (autoStopTimerRef.current) {
@@ -1824,11 +1826,10 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
                         }}
                       >
                         {isVoiceClosing ? (
-                          <View style={styles.voiceSuggestionChipFallbackGlass} />
+                          <View style={styles.voiceComposerInputFallbackGlass} />
                         ) : (
-                          <BlurView intensity={32} tint="light" style={styles.voiceSuggestionChipBlur} />
+                          <BlurView intensity={40} tint="light" style={styles.voiceComposerInputBlur} />
                         )}
-                        <View style={styles.voiceSuggestionChipGloss} />
                         <Text style={styles.voiceComposerSendText}>Send</Text>
                       </Pressable>
                     </View>
@@ -1847,11 +1848,10 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
                           disabled={isProcessingVoice}
                         >
                           {isVoiceClosing ? (
-                            <View style={styles.voiceSuggestionChipFallbackGlass} />
+                            <View style={styles.voiceComposerInputFallbackGlass} />
                           ) : (
-                            <BlurView intensity={32} tint="light" style={styles.voiceSuggestionChipBlur} />
+                            <BlurView intensity={40} tint="light" style={styles.voiceComposerInputBlur} />
                           )}
-                          <View style={styles.voiceSuggestionChipGloss} />
                           <Text style={styles.voiceSuggestionChipText}>{option.label}</Text>
                         </Pressable>
                       ))}
@@ -1870,14 +1870,23 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
                     )}
 
                     {voiceTranscript && (
-                      <View style={styles.chatBubbleUser}>
-                        <Text style={styles.chatBubbleUserText}>{voiceTranscript}</Text>
+                      <View style={styles.chatRowUser}>
+                        <View style={styles.chatBubbleUser}>
+                          <Text style={styles.chatBubbleUserText}>{voiceTranscript}</Text>
+                        </View>
                       </View>
                     )}
 
                     {aiResponse && !isCreatingReminder && (
-                      <View style={styles.chatBubbleAI}>
-                        <Text style={styles.chatBubbleAIText}>{aiResponse}</Text>
+                      <View style={styles.chatRowAI}>
+                        <Image
+                          source={require('../assets/zero.png')}
+                          style={styles.chatAIMascot}
+                          resizeMode="contain"
+                        />
+                        <View style={styles.chatBubbleAI}>
+                          <Text style={styles.chatBubbleAIText}>{aiResponse}</Text>
+                        </View>
                       </View>
                     )}
 
@@ -1888,15 +1897,26 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
                     )}
 
                     {isProcessingVoice && (
-                      <View style={styles.chatBubbleProcessing}>
-                        <View style={styles.processingDots}>
-                          <View style={styles.processingDot} />
-                          <View style={styles.processingDot} />
-                          <View style={styles.processingDot} />
+                      <View style={styles.chatRowAI}>
+                        <Image
+                          source={require('../assets/zero.png')}
+                          style={styles.chatAIMascot}
+                          resizeMode="contain"
+                        />
+                        <View style={styles.chatBubbleProcessing}>
+                          <View style={styles.processingDots}>
+                            <View style={styles.processingDot} />
+                            <View style={styles.processingDot} />
+                            <View style={styles.processingDot} />
+                          </View>
                         </View>
                       </View>
                     )}
                   </ScrollView>
+
+                  <Text style={styles.voiceChatHelperText}>
+                    Describe your entire day to AI and seamlessly create reminders
+                  </Text>
                 </View>
               )}
 
@@ -2074,6 +2094,9 @@ const styles = StyleSheet.create({
     color: 'rgba(18, 16, 24, 0.4)',
     textTransform: 'uppercase',
     letterSpacing: 1.2,
+  },
+  dateList: {
+    marginTop: 4,
   },
   dateListContent: {
     gap: 6,
@@ -2715,35 +2738,50 @@ const styles = StyleSheet.create({
     color: 'rgba(214, 198, 245, 0.7)',
     textAlign: 'center',
   },
+  chatRowUser: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+  },
+  chatRowAI: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 10,
+    justifyContent: 'flex-start',
+  },
+  chatAIMascot: {
+    width: 32,
+    height: 32,
+    marginBottom: 4,
+  },
   chatBubbleUser: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#2F00FF',
     borderRadius: 24,
     padding: 20,
-    maxWidth: '85%',
-    alignSelf: 'flex-start',
+    maxWidth: '78%',
     borderWidth: 1,
-    borderColor: 'rgba(214, 198, 245, 0.3)',
+    borderColor: 'rgba(47, 0, 255, 0.5)',
     shadowColor: '#2F00FF',
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.2,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 },
   },
   chatBubbleUserText: {
     fontSize: 16,
     fontFamily: 'BricolageGrotesque-Regular',
-    color: '#1a1a2e',
+    color: '#ffffff',
     lineHeight: 24,
   },
   chatBubbleAI: {
-    backgroundColor: '#ffffff',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 24,
     padding: 20,
-    maxWidth: '85%',
-    alignSelf: 'flex-start',
+    maxWidth: '72%',
     borderWidth: 1,
-    borderColor: 'rgba(214, 198, 245, 0.3)',
+    borderColor: 'rgba(47, 0, 255, 0.2)',
     shadowColor: '#2F00FF',
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.08,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 },
   },
@@ -2773,8 +2811,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(230, 220, 245, 0.95)',
     borderRadius: 24,
     padding: 20,
-    maxWidth: '85%',
-    alignSelf: 'flex-start',
+    maxWidth: '72%',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.3)',
   },
@@ -2887,12 +2924,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.92)',
-    backgroundColor: 'rgba(255, 255, 255, 0.34)',
+    backgroundColor: 'rgba(255, 255, 255, 0.32)',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowRadius: 10,
+    elevation: 3,
   },
   voiceComposerSendText: {
     color: '#2F00FF',
@@ -2918,12 +2955,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.92)',
-    backgroundColor: 'rgba(255, 255, 255, 0.34)',
+    backgroundColor: 'rgba(255, 255, 255, 0.32)',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowRadius: 10,
+    elevation: 3,
   },
   voiceSuggestionChipDisabled: {
     opacity: 0.55,
@@ -2934,22 +2971,13 @@ const styles = StyleSheet.create({
   voiceSuggestionChipTiltRight: {
     transform: [{ rotate: '4deg' }],
   },
-  voiceSuggestionChipBlur: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  voiceSuggestionChipFallbackGlass: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255, 255, 255, 0.24)',
-  },
-  voiceSuggestionChipGloss: {
-    position: 'absolute',
-    top: 0,
-    left: 2,
-    right: 2,
-    height: 11,
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+  voiceChatHelperText: {
+    marginTop: 12,
+    textAlign: 'center',
+    fontSize: 12,
+    fontFamily: 'BricolageGrotesque-Medium',
+    color: 'rgba(47, 0, 255, 0.7)',
+    lineHeight: 18,
   },
   voiceSuggestionChipText: {
     textAlign: 'center',

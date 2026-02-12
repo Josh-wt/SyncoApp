@@ -66,3 +66,7 @@ build-*.apk
 build-*.aab
 *.app
 *.dSYM.zip
+assets/application-*/
+
+# Service account keys
+google-play-service-account.json

@@ -82,6 +82,8 @@ const QUICK_ACTIONS: {
   },
 ];
 
+const PRIMARY_BLUE = '#2F00FF';
+
 function getActionPreview(type: ReminderActionType, value: any): string {
   switch (type) {
     case 'call':
@@ -193,7 +195,7 @@ export default function TaskConfigSection({ onActionsChange }: TaskConfigSection
 
   return (
     <View style={styles.container}>
-      <View style={[styles.card, expanded && styles.cardExpanded]}>
+      <View style={styles.card}>
         <Pressable
           style={({ pressed }) => [
             styles.headerPressable,
@@ -208,7 +210,7 @@ export default function TaskConfigSection({ onActionsChange }: TaskConfigSection
         >
           <View style={styles.headerContent}>
             <View style={styles.headerBadge}>
-              <MaterialIcons name="bolt" size={18} color="#0f172a" />
+              <MaterialIcons name="bolt" size={18} color={PRIMARY_BLUE} />
             </View>
             <View style={styles.headerText}>
               <Text style={styles.headerTitle}>Quick Actions</Text>
@@ -225,7 +227,7 @@ export default function TaskConfigSection({ onActionsChange }: TaskConfigSection
                 </View>
               )}
               <Animated.View style={{ transform: [{ rotate: chevronRotation }] }}>
-                <MaterialIcons name="expand-more" size={26} color="#0f172a" />
+                <MaterialIcons name="expand-more" size={26} color={PRIMARY_BLUE} />
               </Animated.View>
             </View>
           </View>
@@ -343,17 +345,9 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: 26,
     overflow: 'hidden',
-    shadowColor: '#0f172a',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 14,
-    elevation: 4,
     backgroundColor: '#ffffff',
     borderWidth: 1,
     borderColor: '#e2e8f0',
-  },
-  cardExpanded: {
-    shadowOpacity: 0.12,
   },
   headerPressed: {
     opacity: 0.96,

@@ -1,10 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
 import {
   Image,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
+  TextInput,
   useWindowDimensions,
   View,
   Animated,
@@ -15,8 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import appleAuth from '@invertase/react-native-apple-authentication';
-import { signInWithGoogle, signInWithApple } from '../lib/auth';
+import { signInWithGoogle, signInWithEmail } from '../lib/auth';
 
 interface OnboardingScreenProps {
   onSkip?: () => void;
@@ -85,11 +84,10 @@ function AnimatedDot({ active }: { active: boolean }) {
 export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
   const { width, height } = useWindowDimensions();
   const [currentSlide, setCurrentSlide] = useState(0);
-  const [loading, setLoading] = useState(false);
+  const [loadingProvider, setLoadingProvider] = useState<'email' | 'google' | null>(null);
+  const [email, setEmail] = useState('');
+  const [emailSentTo, setEmailSentTo] = useState<string | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
-  const [isAppleAuthAvailable] = useState(
-    () => Platform.OS === 'ios' && appleAuth.isSupported
-  );
   const contentFadeAnim = useRef(new Animated.Value(1)).current;
   const contentSlideAnim = useRef(new Animated.Value(0)).current;
   const buttonScaleAnim = useRef(new Animated.Value(1)).current;
@@ -101,12 +99,13 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
   const signInTermsAnim = useRef(new Animated.Value(0)).current;
 
   // Auth button press animations
-  const appleScaleAnim = useRef(new Animated.Value(1)).current;
+  const emailScaleAnim = useRef(new Animated.Value(1)).current;
   const googleScaleAnim = useRef(new Animated.Value(1)).current;
 
   const isSignInSlide = currentSlide === SLIDES.length;
   const totalSlides = SLIDES.length + 1; // +1 for sign-in slide
   const slideDistance = 24;
+  const isLoading = loadingProvider !== null;
 
   useEffect(() => {
     const sources = [
@@ -258,28 +257,31 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
   };
 
   const handleGoogleSignIn = async () => {
-    setLoading(true);
+    setLoadingProvider('google');
     setAuthError(null);
+    setEmailSentTo(null);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
       await signInWithGoogle();
     } catch (err) {
       setAuthError(err instanceof Error ? err.message : 'Failed to sign in');
     } finally {
-      setLoading(false);
+      setLoadingProvider(null);
     }
   };
 
-  const handleAppleSignIn = async () => {
-    setLoading(true);
+  const handleEmailSignIn = async () => {
+    setLoadingProvider('email');
     setAuthError(null);
+    setEmailSentTo(null);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
-      await signInWithApple();
+      const result = await signInWithEmail(email);
+      setEmailSentTo(result.email);
     } catch (err) {
       setAuthError(err instanceof Error ? err.message : 'Failed to sign in');
     } finally {
-      setLoading(false);
+      setLoadingProvider(null);
     }
   };
 
@@ -370,43 +372,54 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
               gap: 12,
             }}
           >
-            {/* Apple Sign In */}
-            {isAppleAuthAvailable && (
-              <Animated.View style={{ transform: [{ scale: appleScaleAnim }] }}>
-                <Pressable
-                  onPress={handleAppleSignIn}
-                  onPressIn={() => handleAuthPressIn(appleScaleAnim)}
-                  onPressOut={() => handleAuthPressOut(appleScaleAnim)}
-                  disabled={loading}
-                  style={styles.authButtonOuter}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <BlurView intensity={25} tint="dark" style={styles.authBlur}>
+            <Animated.View style={{ transform: [{ scale: emailScaleAnim }] }}>
+              <View style={styles.emailInputWrap}>
+                <TextInput
+                  value={email}
+                  onChangeText={setEmail}
+                  placeholder="you@example.com"
+                  placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!isLoading}
+                  style={styles.emailInput}
+                />
+              </View>
+
+              <Pressable
+                onPress={handleEmailSignIn}
+                onPressIn={() => handleAuthPressIn(emailScaleAnim)}
+                onPressOut={() => handleAuthPressOut(emailScaleAnim)}
+                disabled={isLoading}
+                style={styles.authButtonOuter}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <BlurView intensity={25} tint="dark" style={styles.authBlur}>
+                  <LinearGradient
+                    colors={['#3f1cf8', '#2F00FF']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 0, y: 1 }}
+                    style={styles.authGradient}
+                  >
                     <LinearGradient
-                      colors={['#1a1a1a', '#000000']}
+                      colors={['rgba(255, 255, 255, 0.2)', 'rgba(255, 255, 255, 0)']}
                       start={{ x: 0, y: 0 }}
-                      end={{ x: 0, y: 1 }}
-                      style={styles.authGradient}
-                    >
-                      <LinearGradient
-                        colors={['rgba(255, 255, 255, 0.15)', 'rgba(255, 255, 255, 0)']}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 0, y: 0.5 }}
-                        style={styles.highlightTop}
-                      />
-                      {loading ? (
-                        <ActivityIndicator color="#ffffff" />
-                      ) : (
-                        <View style={styles.authContent}>
-                          <Ionicons name="logo-apple" size={22} color="#ffffff" />
-                          <Text style={styles.authButtonText}>Continue with Apple</Text>
-                        </View>
-                      )}
-                    </LinearGradient>
-                  </BlurView>
-                </Pressable>
-              </Animated.View>
-            )}
+                      end={{ x: 0, y: 0.5 }}
+                      style={styles.highlightTop}
+                    />
+                    {loadingProvider === 'email' ? (
+                      <ActivityIndicator color="#ffffff" />
+                    ) : (
+                      <View style={styles.authContent}>
+                        <Ionicons name="mail-outline" size={22} color="#ffffff" />
+                        <Text style={styles.authButtonText}>Continue with Email</Text>
+                      </View>
+                    )}
+                  </LinearGradient>
+                </BlurView>
+              </Pressable>
+            </Animated.View>
 
             {/* Google Sign In */}
             <Animated.View style={{ transform: [{ scale: googleScaleAnim }] }}>
@@ -414,7 +427,7 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
                 onPress={handleGoogleSignIn}
                 onPressIn={() => handleAuthPressIn(googleScaleAnim)}
                 onPressOut={() => handleAuthPressOut(googleScaleAnim)}
-                disabled={loading}
+                disabled={isLoading}
                 style={styles.authButtonOuter}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
@@ -431,7 +444,7 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
                       end={{ x: 0, y: 0.5 }}
                       style={styles.highlightTop}
                     />
-                    {loading ? (
+                    {loadingProvider === 'google' ? (
                       <ActivityIndicator color="#2F00FF" />
                     ) : (
                       <View style={styles.authContent}>
@@ -445,6 +458,12 @@ export default function OnboardingScreen({ onSkip }: OnboardingScreenProps) {
                 </BlurView>
               </Pressable>
             </Animated.View>
+
+            {emailSentTo && (
+              <View style={styles.successContainer}>
+                <Text style={styles.successText}>Check {emailSentTo} for your sign-in link.</Text>
+              </View>
+            )}
 
             {authError && (
               <View style={styles.errorContainer}>
@@ -813,6 +832,20 @@ const styles = StyleSheet.create({
   authButtonOuter: {
     borderRadius: 100,
   },
+  emailInputWrap: {
+    marginBottom: 12,
+  },
+  emailInput: {
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.22)',
+    borderRadius: 100,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    color: '#ffffff',
+    fontSize: 15,
+    fontFamily: 'BricolageGrotesque-Regular',
+    backgroundColor: 'rgba(8, 8, 8, 0.3)',
+  },
   authBlur: {
     borderRadius: 100,
     overflow: 'hidden',
@@ -851,6 +884,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'BricolageGrotesque-Regular',
     color: '#fca5a5',
+    textAlign: 'center',
+  },
+  successContainer: {
+    backgroundColor: 'rgba(34, 197, 94, 0.16)',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(34, 197, 94, 0.32)',
+  },
+  successText: {
+    fontSize: 14,
+    fontFamily: 'BricolageGrotesque-Regular',
+    color: '#bbf7d0',
     textAlign: 'center',
   },
   termsText: {

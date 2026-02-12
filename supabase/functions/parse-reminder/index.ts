@@ -97,16 +97,84 @@ function sanitizeRecurringRule(rule: unknown) {
   };
 }
 
+function normalizeReminderText(text: string): string {
+  return text
+    .replace(/\b(remind me( to)?|set (a )?reminder( to)?|don't forget( to)?|can you remind me( to)?|please)\b/gi, ' ')
+    .replace(/\b(today|tonight|tomorrow|tmr|this morning|this afternoon|this evening|next week|next month|next year)\b/gi, ' ')
+    .replace(/\b(at|on|by)\s+\d{1,2}(:\d{2})?\s*(am|pm)?\b/gi, ' ')
+    .replace(/\b(in)\s+\d+\s+(minute|minutes|hour|hours|day|days|week|weeks|month|months|year|years)\b/gi, ' ')
+    .replace(/\b(every)\s+\d*\s*(hour|hours|day|days|week|weeks|month|months|year|years)\b/gi, ' ')
+    .replace(/[.,!?;:()]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function extractWords(text: string): string[] {
+  return text.match(/[A-Za-z0-9']+/g) ?? [];
+}
+
+function toTitleCase(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/\b\w/g, (match) => match.toUpperCase());
+}
+
+function clampWords(input: string, minWords: number, maxWords: number, fallback: string): string {
+  const words = extractWords(input).slice(0, maxWords);
+  const fallbackWords = extractWords(fallback);
+
+  let fallbackIndex = 0;
+  while (words.length < minWords && fallbackIndex < fallbackWords.length) {
+    words.push(fallbackWords[fallbackIndex]);
+    fallbackIndex += 1;
+  }
+
+  while (words.length < minWords) {
+    words.push('Reminder');
+  }
+
+  return words.slice(0, maxWords).join(' ');
+}
+
+function sanitizeTitleText(candidate: string, fallback: string): string {
+  const normalizedCandidate = normalizeReminderText(candidate);
+  const normalizedFallback = normalizeReminderText(fallback);
+  const source = normalizedCandidate || normalizedFallback || 'Quick task reminder';
+  return toTitleCase(clampWords(source, 3, 6, 'Task Reminder'));
+}
+
+function sanitizeDescriptionText(candidate: string, sourceText: string, title: string): string {
+  const titleWords = new Set(extractWords(title).map((word) => word.toLowerCase()));
+
+  const descriptionWords = extractWords(normalizeReminderText(candidate)).filter(
+    (word) => !titleWords.has(word.toLowerCase())
+  );
+  const sourceWords = extractWords(normalizeReminderText(sourceText)).filter(
+    (word) => !titleWords.has(word.toLowerCase())
+  );
+
+  const base = descriptionWords.length > 0
+    ? descriptionWords.join(' ')
+    : sourceWords.join(' ');
+  const clamped = clampWords(base, 5, 8, 'Include key details and relevant context');
+  if (!clamped) {
+    return 'Include key details and relevant context';
+  }
+
+  return `${clamped.charAt(0).toUpperCase()}${clamped.slice(1)}`;
+}
+
 function sanitizeReminder(
   reminder: unknown,
   fallbackTitle: string,
   fallbackSchedule: string,
-  timezoneOffset: number
+  timezoneOffset: number,
+  sourceText: string
 ) {
   const reminderObj = typeof reminder === 'object' && reminder ? (reminder as Record<string, unknown>) : {};
 
   const titleRaw = typeof reminderObj.title === 'string' ? reminderObj.title.trim() : '';
-  const title = titleRaw.length > 0 ? titleRaw : fallbackTitle;
+  const title = sanitizeTitleText(titleRaw, fallbackTitle);
 
   let scheduledTime = typeof reminderObj.scheduled_time === 'string'
     ? reminderObj.scheduled_time.trim()
@@ -136,7 +204,7 @@ function sanitizeReminder(
   const descriptionRaw = typeof reminderObj.description === 'string'
     ? reminderObj.description.trim()
     : '';
-  const description = descriptionRaw.length > 0 ? descriptionRaw : undefined;
+  const description = sanitizeDescriptionText(descriptionRaw, sourceText, title);
 
   return {
     title,
@@ -177,7 +245,7 @@ Return ONLY valid JSON with one of these shapes:
     {
       "title": "short action title",
       "scheduled_time": "ISO-8601 datetime with timezone offset",
-      "description": "optional extra context",
+      "description": "required short notes",
       "is_priority": false,
       "notify_before_minutes": 0,
       "recurring_rule": null
@@ -192,7 +260,10 @@ Rules:
 - scheduled_time must include timezone information.
 - Use CURRENT_TIME as the reference.
 - If time is missing, set scheduled_time to CURRENT_TIME + 10 minutes.
-- Keep title short (2-6 words).
+- Title MUST be 3-6 words.
+- Description MUST be 5-8 words.
+- Description must add useful context and not just repeat title.
+- Do not copy the full user prompt verbatim.
 - recurring_rule can be null or:
   { "name": string, "frequency": number, "frequency_unit": "days"|"weeks"|"months"|"years", "selected_days": number[] }.
 
@@ -212,7 +283,7 @@ Return JSON only, no markdown.`;
       Authorization: `Bearer ${openaiKey}`,
     },
     body: JSON.stringify({
-      model: 'gpt-4o-mini',
+      model: 'gpt-4o',
       temperature: 0.2,
       messages: [
         { role: 'system', content: systemPrompt },
@@ -233,7 +304,7 @@ Return JSON only, no markdown.`;
   }
 
   const parsed = JSON.parse(normalizeJsonFromModel(content));
-  const fallbackTitle = text.trim().length > 0 ? text.trim() : 'Reminder';
+  const fallbackTitle = sanitizeTitleText('', text.trim().length > 0 ? text.trim() : 'Reminder');
 
   if (parsed?.type === 'conversation') {
     const responseText = typeof parsed.response === 'string' ? parsed.response.trim() : '';
@@ -250,7 +321,7 @@ Return JSON only, no markdown.`;
       : [];
 
   const reminders = (remindersRaw.length > 0 ? remindersRaw : [{}]).map((item) =>
-    sanitizeReminder(item, fallbackTitle, fallbackSchedule, timezoneOffset)
+    sanitizeReminder(item, fallbackTitle, fallbackSchedule, timezoneOffset, text)
   );
 
   return {

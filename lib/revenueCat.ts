@@ -3,7 +3,7 @@ import { Alert, Platform } from 'react-native';
 
 // RevenueCat public SDK keys (safe for client-side use)
 const REVENUECAT_ANDROID_PUBLIC_SDK_KEY = 'goog_OJqyYaAaHBAPmIiPXSiwBYQGWOV';
-const REVENUECAT_IOS_PUBLIC_SDK_KEY = 'test_VztDxPSOfdZXaKLQsEkkEcDqEFs';
+const REVENUECAT_IOS_PUBLIC_SDK_KEY = 'appl_yLRoJlSzsAbtnhAYoXawFRFpuPP';
 
 function getRevenueCatPublicKey(): string {
   if (Platform.OS === 'android') {

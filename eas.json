@@ -1,7 +1,7 @@
 {
   "cli": {
     "version": ">= 13.2.0",
-    "appVersionSource": "remote"
+    "appVersionSource": "local"
   },
   "build": {
     "development": {
@@ -13,9 +13,6 @@
       },
       "android": {
         "buildType": "apk"
-      },
-      "env": {
-        "EXPO_NO_CAPABILITY_SYNC": "1"
       }
     },
     "development-device": {
@@ -24,9 +21,6 @@
       "ios": {
         "simulator": false,
         "buildConfiguration": "Debug"
-      },
-      "env": {
-        "EXPO_NO_CAPABILITY_SYNC": "1"
       }
     },
     "preview": {
@@ -36,18 +30,12 @@
       },
       "android": {
         "buildType": "apk"
-      },
-      "env": {
-        "EXPO_NO_CAPABILITY_SYNC": "1"
       }
     },
     "ios-simulator": {
       "ios": {
         "simulator": true,
         "buildConfiguration": "Release"
-      },
-      "env": {
-        "EXPO_NO_CAPABILITY_SYNC": "1"
       }
     },
     "ios-ipa": {
@@ -55,9 +43,6 @@
       "ios": {
         "simulator": false,
         "buildConfiguration": "Release"
-      },
-      "env": {
-        "EXPO_NO_CAPABILITY_SYNC": "1"
       }
     },
     "production": {
@@ -68,9 +53,6 @@
       },
       "android": {
         "buildType": "app-bundle"
-      },
-      "env": {
-        "EXPO_NO_CAPABILITY_SYNC": "1"
       }
     },
     "android-apk": {

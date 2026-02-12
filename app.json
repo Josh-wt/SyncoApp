@@ -10,8 +10,8 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
+      "buildNumber": "9",
       "bundleIdentifier": "com.syncoapp.app",
-      "usesAppleSignIn": true,
       "infoPlist": {
         "NSMicrophoneUsageDescription": "Allow Synco to access your microphone to record voice reminders.",
         "UIBackgroundModes": [
@@ -36,6 +36,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
+      "versionCode": 10,
       "package": "com.synco.app",
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
@@ -46,6 +47,9 @@
         "RECORD_AUDIO",
         "POST_NOTIFICATIONS",
         "RECEIVE_BOOT_COMPLETED"
+      ],
+      "blockedPermissions": [
+        "android.permission.CAMERA"
       ],
       "usesCleartextTraffic": false
     },

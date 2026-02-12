@@ -1,16 +1,15 @@
 import { useState } from 'react';
 import {
-  Platform,
   Pressable,
   StyleSheet,
   Text,
   View,
   ActivityIndicator,
   Alert,
+  TextInput,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import appleAuth from '@invertase/react-native-apple-authentication';
-import { signInWithGoogle, signInWithApple } from '../lib/auth';
+import { signInWithGoogle, signInWithEmail } from '../lib/auth';
 import { GlowTopRight, GlowBottomLeft } from '../components/icons';
 
 interface AuthScreenProps {
@@ -19,43 +18,42 @@ interface AuthScreenProps {
 
 export default function AuthScreen({ onBack }: AuthScreenProps) {
   const insets = useSafeAreaInsets();
-  const [loading, setLoading] = useState(false);
+  const [loadingProvider, setLoadingProvider] = useState<'email' | 'google' | null>(null);
+  const [email, setEmail] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [isAppleAuthAvailable] = useState(
-    () => Platform.OS === 'ios' && appleAuth.isSupported
-  );
+  const [emailSentTo, setEmailSentTo] = useState<string | null>(null);
+  const isLoading = loadingProvider !== null;
 
   const handleGoogleSignIn = async () => {
-    setLoading(true);
+    setLoadingProvider('google');
     setError(null);
+    setEmailSentTo(null);
 
     try {
-      const result = await signInWithGoogle();
+      await signInWithGoogle();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to sign in with Google';
       setError(message);
       Alert.alert('Sign In Error', message);
     } finally {
-      setLoading(false);
+      setLoadingProvider(null);
     }
   };
 
-  const handleAppleSignIn = async () => {
-    console.log('🍎 [AuthScreen] Apple sign-in button pressed');
-    setLoading(true);
+  const handleEmailSignIn = async () => {
+    setLoadingProvider('email');
     setError(null);
+    setEmailSentTo(null);
 
     try {
-      const result = await signInWithApple();
-      console.log('🍎 [AuthScreen] Apple sign-in completed:', { hasResult: !!result });
+      const result = await signInWithEmail(email);
+      setEmailSentTo(result.email);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to sign in with Apple';
-      console.error('🔴 [AuthScreen] Apple sign-in error:', err);
+      const message = err instanceof Error ? err.message : 'Failed to sign in with email';
       setError(message);
       Alert.alert('Sign In Error', message);
     } finally {
-      console.log('🍎 [AuthScreen] Apple sign-in flow ended');
-      setLoading(false);
+      setLoadingProvider(null);
     }
   };
 
@@ -79,29 +77,41 @@ export default function AuthScreen({ onBack }: AuthScreenProps) {
 
         {/* Auth Buttons */}
         <View style={styles.buttonContainer}>
-          {isAppleAuthAvailable && (
+          <View style={styles.emailContainer}>
+            <TextInput
+              value={email}
+              onChangeText={setEmail}
+              style={styles.emailInput}
+              placeholder="you@example.com"
+              placeholderTextColor="rgba(18, 16, 24, 0.4)"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!isLoading}
+            />
+
             <Pressable
-              style={[styles.authButton, styles.appleButton, loading && styles.buttonDisabled]}
-              onPress={handleAppleSignIn}
-              disabled={loading}
+              style={[styles.authButton, styles.emailButton, isLoading && styles.buttonDisabled]}
+              onPress={handleEmailSignIn}
+              disabled={isLoading}
             >
-              {loading ? (
+              {loadingProvider === 'email' ? (
                 <ActivityIndicator color="#ffffff" />
               ) : (
                 <>
-                  <Text style={styles.appleIcon}></Text>
-                  <Text style={styles.authButtonText}>Continue with Apple</Text>
+                  <Text style={styles.emailIcon}>@</Text>
+                  <Text style={styles.authButtonText}>Continue with Email</Text>
                 </>
               )}
             </Pressable>
-          )}
+          </View>
 
           <Pressable
-            style={[styles.authButton, styles.googleButton, loading && styles.buttonDisabled]}
+            style={[styles.authButton, styles.googleButton, isLoading && styles.buttonDisabled]}
             onPress={handleGoogleSignIn}
-            disabled={loading}
+            disabled={isLoading}
           >
-            {loading ? (
+            {loadingProvider === 'google' ? (
               <ActivityIndicator color="#2F00FF" />
             ) : (
               <>
@@ -110,6 +120,12 @@ export default function AuthScreen({ onBack }: AuthScreenProps) {
               </>
             )}
           </Pressable>
+
+          {emailSentTo && (
+            <View style={styles.successContainer}>
+              <Text style={styles.successText}>Check {emailSentTo} for your sign-in link.</Text>
+            </View>
+          )}
 
           {error && (
             <View style={styles.errorContainer}>
@@ -177,6 +193,20 @@ const styles = StyleSheet.create({
   buttonContainer: {
     gap: 16,
   },
+  emailContainer: {
+    gap: 12,
+  },
+  emailInput: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(47, 0, 255, 0.2)',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 15,
+    fontFamily: 'BricolageGrotesque-Regular',
+    color: '#121018',
+  },
   authButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -189,8 +219,8 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 },
   },
-  appleButton: {
-    backgroundColor: '#000000',
+  emailButton: {
+    backgroundColor: '#2F00FF',
   },
   googleButton: {
     backgroundColor: '#ffffff',
@@ -208,7 +238,7 @@ const styles = StyleSheet.create({
   googleButtonText: {
     color: '#121018',
   },
-  appleIcon: {
+  emailIcon: {
     fontSize: 20,
     color: '#ffffff',
   },
@@ -229,6 +259,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'BricolageGrotesque-Regular',
     color: '#dc2626',
+    textAlign: 'center',
+  },
+  successContainer: {
+    backgroundColor: 'rgba(34, 197, 94, 0.12)',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(34, 197, 94, 0.28)',
+  },
+  successText: {
+    fontSize: 14,
+    fontFamily: 'BricolageGrotesque-Regular',
+    color: '#166534',
     textAlign: 'center',
   },
   termsText: {
