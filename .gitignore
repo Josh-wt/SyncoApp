@@ -55,7 +55,6 @@ assets/fonts/DMSans/*.ttf
 !assets/fonts/DMSans/DMSans-Black.ttf
 
 # generated native folders
-/ios
 /android
 
 # Build artifacts
