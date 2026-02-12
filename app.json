@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Synco",
+    "name": "Remmy",
     "slug": "remmy",
     "scheme": "synco",
     "version": "1.0.0",
@@ -13,7 +13,7 @@
       "buildNumber": "9",
       "bundleIdentifier": "com.syncoapp.app",
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "Allow Synco to access your microphone to record voice reminders.",
+        "NSMicrophoneUsageDescription": "Allow Remmy to access your microphone to record voice reminders.",
         "UIBackgroundModes": [
           "fetch",
           "remote-notification"
@@ -36,7 +36,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "versionCode": 10,
+      "versionCode": 14,
       "package": "com.synco.app",
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
@@ -69,7 +69,8 @@
       [
         "expo-notifications",
         {
-          "color": "#2F00FF"
+          "color": "#2F00FF",
+          "icon": "./assets/zero.png"
         }
       ],
       "expo-build-properties",

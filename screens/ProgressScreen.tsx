@@ -340,10 +340,9 @@ export default function ProgressScreen({
       ]);
 
       // Sort by priority
-      const sortedOverdue = overdue
+        const sortedOverdue = overdue
         .map(reminder => ({ reminder, priority: getPriority(reminder) }))
         .sort((a, b) => a.priority - b.priority)
-        .slice(0, 5) // Show max 5 cards
         .map(item => item.reminder);
 
       setOverdueReminders(sortedOverdue);
@@ -395,23 +394,18 @@ export default function ProgressScreen({
     };
   }, [fetchProgressData]);
 
-  useEffect(() => {
-    let isActive = true;
-    if (!selectedReminder) {
-      setSelectedActions([]);
-      return;
+  const openReminderWithActions = useCallback(async (reminder: Reminder) => {
+    let actions: ReminderAction[] = [];
+    try {
+      actions = await getReminderActions(reminder.id);
+    } catch (err) {
+      console.error('Failed to fetch actions for picker:', err);
     }
 
-    getReminderActions(selectedReminder.id)
-      .then((actions) => {
-        if (isActive) setSelectedActions(actions);
-      })
-      .catch((err) => console.error('Failed to fetch actions for picker:', err));
-
-    return () => {
-      isActive = false;
-    };
-  }, [selectedReminder]);
+    setSelectedReminder(reminder);
+    setSelectedActions(actions);
+    setShowActionPicker(true);
+  }, []);
 
   const openReminderById = useCallback(async (reminderId: string) => {
     let reminder = overdueReminders.find((item) => item.id === reminderId) ?? null;
@@ -419,10 +413,9 @@ export default function ProgressScreen({
       reminder = await getReminderById(reminderId);
     }
     if (reminder) {
-      setSelectedReminder(reminder);
-      setShowActionPicker(true);
+      await openReminderWithActions(reminder);
     }
-  }, [overdueReminders]);
+  }, [openReminderWithActions, overdueReminders]);
 
   useEffect(() => {
     if (!openReminderRequest?.id) return;
@@ -433,10 +426,9 @@ export default function ProgressScreen({
 
   const handleCardPress = useCallback(
     (reminder: Reminder) => {
-      setSelectedReminder(reminder);
-      setShowActionPicker(true);
+      void openReminderWithActions(reminder);
     },
-    []
+    [openReminderWithActions]
   );
 
   const handleQuickActionPress = useCallback(async (action: ReminderAction) => {

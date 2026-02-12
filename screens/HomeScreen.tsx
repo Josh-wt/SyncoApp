@@ -12,7 +12,7 @@ import { useReminders } from '../hooks/useReminders';
 import ProgressScreen from './ProgressScreen';
 import TimelineScreenV2 from './TimelineScreenV2';
 import SettingsScreen from './SettingsScreen';
-import { CreateReminderInput } from '../lib/types';
+import { CreateReminderActionInput, CreateReminderInput } from '../lib/types';
 import ManualCreateScreen from './ManualCreateScreen';
 
 const HINT_STORAGE_KEY = '@synco_first_time_hint_shown';
@@ -24,6 +24,10 @@ type NotificationOpenRequest = { id: string; at: number } | null;
 interface HomeScreenProps {
   notificationOpenRequest?: NotificationOpenRequest;
 }
+
+type SaveReminderOptions = {
+  actions?: CreateReminderActionInput[];
+};
 
 export default function HomeScreen({ notificationOpenRequest }: HomeScreenProps) {
   const insets = useSafeAreaInsets();
@@ -125,9 +129,9 @@ export default function HomeScreen({ notificationOpenRequest }: HomeScreenProps)
     }
   }, [switchScreen]);
 
-  const handleSaveReminder = useCallback(async (input: CreateReminderInput) => {
+  const handleSaveReminder = useCallback(async (input: CreateReminderInput, options?: SaveReminderOptions) => {
     try {
-      const newReminder = await addReminder(input);
+      const newReminder = await addReminder(input, options);
       return newReminder;
     } catch {
       Alert.alert('Error', 'Failed to save reminder. Please try again.');

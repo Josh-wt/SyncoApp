@@ -12,6 +12,8 @@ import { ReminderAction, ReminderActionType, SnoozeMode } from './types';
 import { updateReminderStatus } from './reminders';
 import { getReminderActions } from './reminderActions';
 
+const ACTIONABLE_NOTIFICATION_ACTION_TYPES: ReminderActionType[] = ['call', 'link', 'location', 'email'];
+
 // Action identifier prefixes
 const PREFIX_COMPLETE = 'complete';
 const PREFIX_SNOOZE = 'snooze';
@@ -21,6 +23,8 @@ const PREFIX_LOCATION = 'location';
 const PREFIX_EMAIL = 'email';
 const PREFIX_NOTE = 'note';
 const PREFIX_SUBTASKS = 'subtasks';
+const MAX_NOTIFICATION_ACTIONS = 4;
+const MAX_SNOOZE_PRESETS = 3;
 
 function sanitizeIdentifierPart(value: string): string {
   return value
@@ -66,6 +70,18 @@ function generateCategoryId(
   return `${categoryId.slice(0, 100)}_${digest}`;
 }
 
+export function getDynamicNotificationCategoryId(
+  reminderId: string,
+  actions: ReminderAction[],
+  snoozeMode: SnoozeMode = 'text_input'
+): string {
+  const actionableActions = actions.filter((action) =>
+    ACTIONABLE_NOTIFICATION_ACTION_TYPES.includes(action.action_type)
+  );
+  const actionTypes = actionableActions.map((action) => action.action_type);
+  return generateCategoryId(reminderId, actionTypes, snoozeMode);
+}
+
 function parseMinutesFromUserText(value: string | undefined): number | null {
   if (!value) return null;
   const trimmed = value.trim();
@@ -80,6 +96,20 @@ function parseMinutesFromUserText(value: string | undefined): number | null {
   }
 
   return Math.floor(parsed);
+}
+
+function normalizeSnoozePresets(values: number[] | undefined, fallbackMinutes: number): number[] {
+  const source = Array.isArray(values) ? values : [];
+  const normalized = source
+    .map((value) => Math.floor(Number(value)))
+    .filter((value) => Number.isFinite(value) && value > 0);
+
+  const uniqueSorted = Array.from(new Set(normalized)).sort((a, b) => a - b);
+  if (uniqueSorted.length > 0) {
+    return uniqueSorted.slice(0, MAX_SNOOZE_PRESETS);
+  }
+
+  return [Math.max(1, Math.floor(fallbackMinutes))];
 }
 
 /**
@@ -171,16 +201,15 @@ export async function createDynamicNotificationCategory(
 ): Promise<string> {
   const snoozeMode = options?.snoozeMode ?? 'text_input';
   const defaultSnoozeMinutes = Math.max(1, Math.floor(options?.defaultSnoozeMinutes ?? 15));
+  const snoozePresets = normalizeSnoozePresets(options?.snoozePresetValues, defaultSnoozeMinutes);
 
   // Filter to only actionable types that can be executed from notification
-  const actionableTypes: ReminderActionType[] = ['call', 'link', 'location', 'email'];
-  const actionableActions = actions.filter(a =>
-    actionableTypes.includes(a.action_type)
+  const actionableActions = actions.filter((action) =>
+    ACTIONABLE_NOTIFICATION_ACTION_TYPES.includes(action.action_type)
   );
 
   // Generate category ID based on action types
-  const actionTypes = actionableActions.map(a => a.action_type);
-  const categoryId = generateCategoryId(reminderId, actionTypes, snoozeMode);
+  const categoryId = getDynamicNotificationCategoryId(reminderId, actions, snoozeMode);
 
   const notificationActions: Notifications.NotificationAction[] = [];
 
@@ -201,14 +230,18 @@ export async function createDynamicNotificationCategory(
       options: { opensAppToForeground: true },
     });
   } else {
-    const snoozeLabel = defaultSnoozeMinutes >= 60
-      ? `⏰ Snooze ${defaultSnoozeMinutes / 60}h`
-      : `⏰ Snooze ${defaultSnoozeMinutes}m`;
+    const availablePresetSlots = Math.max(1, MAX_NOTIFICATION_ACTIONS - notificationActions.length - 1);
+    const presetButtons = snoozePresets.slice(0, availablePresetSlots);
 
-    notificationActions.push({
-      identifier: `${PREFIX_SNOOZE}_${reminderId}`,
-      buttonTitle: snoozeLabel,
-      options: { opensAppToForeground: true },
+    presetButtons.forEach((minutes) => {
+      const label = minutes >= 60
+        ? `${minutes / 60}h`
+        : `${minutes}m`;
+      notificationActions.push({
+        identifier: `${PREFIX_SNOOZE}_${minutes}_${reminderId}`,
+        buttonTitle: `⏰ ${label}`,
+        options: { opensAppToForeground: false },
+      });
     });
   }
 
@@ -255,7 +288,7 @@ export async function handleDynamicNotificationAction(
     return false;
   }
 
-  // Parse action identifier: "prefix_actionId" or "prefix_reminderId"
+  // Parse action identifier: "prefix_actionId", "prefix_reminderId", or "snooze_minutes_reminderId"
   const parts = actionIdentifier.split('_');
   if (parts.length < 2) return false;
 
@@ -270,13 +303,18 @@ export async function handleDynamicNotificationAction(
         return true;
 
       case PREFIX_SNOOZE:
+        const presetMinutes =
+          parts.length >= 3 ? Number.parseInt(parts[1], 10) : Number.NaN;
         const typedMinutes = parseMinutesFromUserText(response.userText);
         const rawSnoozeMinutes = data?.defaultSnoozeMinutes;
         const fallbackMinutes =
           typeof rawSnoozeMinutes === 'number' && Number.isFinite(rawSnoozeMinutes)
             ? rawSnoozeMinutes
             : Number.parseInt(String(rawSnoozeMinutes), 10) || 15;
-        const snoozeMinutes = typedMinutes ?? Math.max(1, Math.floor(fallbackMinutes));
+        const snoozeMinutes =
+          Number.isFinite(presetMinutes) && presetMinutes > 0
+            ? Math.floor(presetMinutes)
+            : typedMinutes ?? Math.max(1, Math.floor(fallbackMinutes));
         onSnooze?.(reminderId, snoozeMinutes);
         // Snoozing is handled by the main notification handler
         await Notifications.dismissNotificationAsync(notification.request.identifier);

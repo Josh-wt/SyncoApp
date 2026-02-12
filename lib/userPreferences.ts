@@ -44,6 +44,8 @@ export async function createDefaultPreferences(): Promise<UserPreferences | null
     .insert({
       user_id: user.id,
       snooze_mode: 'text_input',
+      default_snooze_minutes: 10,
+      snooze_preset_values: [10, 15, 30],
     })
     .select()
     .single();
@@ -149,6 +151,8 @@ export async function resetPreferencesToDefault(): Promise<UserPreferences | nul
 
   const defaultPrefs: UpdateUserPreferencesInput = {
     snooze_mode: 'text_input',
+    default_snooze_minutes: 10,
+    snooze_preset_values: [10, 15, 30],
     notification_sound: true,
     notification_vibration: true,
     priority_notification_sound: true,

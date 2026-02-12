@@ -9,6 +9,7 @@ import { getUserPreferences } from './userPreferences';
 import { getReminderActions } from './reminderActions';
 import {
   createDynamicNotificationCategory,
+  getDynamicNotificationCategoryId,
   handleDynamicNotificationAction,
 } from './notificationCategories';
 
@@ -425,16 +426,23 @@ async function _doSyncLocalReminderSchedules(): Promise<void> {
 
     const existingRecord = existingByReminder.get(reminder.id);
     if (existingRecord) {
+      const reminderActions = actionsByReminder.get(reminder.id) ?? [];
       const existingNotification = scheduledById.get(existingRecord.notification_id);
       const hasCategoryIdentifier = hasSupportedCategoryIdentifier(
         existingNotification?.content.categoryIdentifier
       );
+      const expectedCategoryIdentifier = getDynamicNotificationCategoryId(
+        reminder.id,
+        reminderActions,
+        preferences?.snooze_mode ?? 'text_input'
+      );
+      const categoryMatches = existingNotification?.content.categoryIdentifier === expectedCategoryIdentifier;
       const existingTime = new Date(existingRecord.scheduled_for).getTime();
       const snoozedUntil = existingRecord.snoozed_until ? new Date(existingRecord.snoozed_until).getTime() : null;
       const reminderUpdatedAt = reminder.updated_at;
       const recordUpdatedAt = existingRecord.reminder_updated_at;
 
-      if (snoozedUntil && snoozedUntil > now && hasCategoryIdentifier) {
+      if (snoozedUntil && snoozedUntil > now && hasCategoryIdentifier && categoryMatches) {
         keepIds.add(existingRecord.id);
         continue;
       }
@@ -442,7 +450,7 @@ async function _doSyncLocalReminderSchedules(): Promise<void> {
       const unchanged = recordUpdatedAt && reminderUpdatedAt === recordUpdatedAt;
       const closeToTarget = Math.abs(existingTime - notifyAtMs) < 60 * 1000;
 
-      if (unchanged && closeToTarget && existingTime > now && hasCategoryIdentifier) {
+      if (unchanged && closeToTarget && existingTime > now && hasCategoryIdentifier && categoryMatches) {
         keepIds.add(existingRecord.id);
         continue;
       }

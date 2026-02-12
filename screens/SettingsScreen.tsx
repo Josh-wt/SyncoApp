@@ -7,6 +7,7 @@ import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
 import { supabase } from '../lib/supabase';
 import { getUserPreferences, updateUserPreferences, updateNotificationPreferences } from '../lib/userPreferences';
+import { syncReminderNotifications } from '../lib/notifications';
 import { generateAccountCode, getActiveAccountCode } from '../lib/accountCodes';
 import { getTodayReminderCount } from '../lib/reminderLimits';
 import { useSubscription } from '../hooks/useSubscription';
@@ -16,6 +17,7 @@ import AccountCodeInput from '../components/settings/AccountCodeInput';
 import PaywallModal from '../components/PaywallModal';
 
 const SNOOZE_PRESET_OPTIONS = [5, 10, 15, 20, 30, 45, 60];
+const MAX_SNOOZE_PRESETS = 3;
 
 // Animated section wrapper with staggered entry
 function AnimatedSection({
@@ -119,6 +121,17 @@ export default function SettingsScreen() {
   const [codeGenerating, setCodeGenerating] = useState(false);
   const [codeCopied, setCodeCopied] = useState(false);
 
+  const normalizeSnoozePresets = (values: number[] | null | undefined) => {
+    const normalized = (values ?? [])
+      .map((value) => Math.floor(Number(value)))
+      .filter((value) => Number.isFinite(value) && value > 0);
+    return Array.from(new Set(normalized)).sort((a, b) => a - b);
+  };
+
+  const selectedSnoozePresets = normalizeSnoozePresets(preferences?.snooze_preset_values);
+  const currentDefaultSnoozeMinutes = Math.max(1, Math.floor(preferences?.default_snooze_minutes ?? 10));
+  const isQuickPresetMode = (preferences?.snooze_mode ?? 'text_input') === 'presets';
+
   // Header animation
   const headerOpacity = useRef(new Animated.Value(0)).current;
   const headerSlide = useRef(new Animated.Value(-20)).current;
@@ -165,12 +178,18 @@ export default function SettingsScreen() {
     }
   };
 
-  const handleUpdatePreference = async (updates: Partial<UserPreferences>) => {
+  const handleUpdatePreference = async (
+    updates: Partial<UserPreferences>,
+    options?: { syncNotifications?: boolean }
+  ) => {
     try {
       const updated = await updateUserPreferences(updates as any);
       if (updated) {
         setPreferences(updated);
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        if (options?.syncNotifications) {
+          void syncReminderNotifications();
+        }
       }
     } catch {
       Alert.alert('Error', 'Failed to update setting');
@@ -178,8 +197,11 @@ export default function SettingsScreen() {
   };
 
   const handleSnoozePresetToggle = (minutes: number) => {
-    const current = preferences?.snooze_preset_values ?? [5, 10, 15, 30];
+    const current = selectedSnoozePresets.length > 0
+      ? selectedSnoozePresets
+      : [currentDefaultSnoozeMinutes];
     let updated: number[];
+
     if (current.includes(minutes)) {
       updated = current.filter(m => m !== minutes);
       if (updated.length === 0) {
@@ -187,9 +209,13 @@ export default function SettingsScreen() {
         return;
       }
     } else {
+      if (current.length >= MAX_SNOOZE_PRESETS) {
+        Alert.alert('Preset Limit', `Choose up to ${MAX_SNOOZE_PRESETS} quick presets.`);
+        return;
+      }
       updated = [...current, minutes].sort((a, b) => a - b);
     }
-    handleUpdatePreference({ snooze_preset_values: updated });
+    handleUpdatePreference({ snooze_preset_values: updated }, { syncNotifications: true });
   };
 
   const handleGenerateCode = async () => {
@@ -559,7 +585,7 @@ export default function SettingsScreen() {
               </View>
               <View className="flex-row gap-3 ml-14">
                 {([
-                  { value: 'text_input' as SnoozeMode, label: 'Type Duration', icon: 'keyboard' as const },
+                  { value: 'text_input' as SnoozeMode, label: 'Type Duration (Default)', icon: 'keyboard' as const },
                   { value: 'presets' as SnoozeMode, label: 'Quick Presets', icon: 'timer' as const },
                 ]).map((option) => {
                   const isSelected = (preferences?.snooze_mode ?? 'text_input') === option.value;
@@ -568,7 +594,7 @@ export default function SettingsScreen() {
                       key={option.value}
                       onPress={() => {
                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        handleUpdatePreference({ snooze_mode: option.value });
+                        handleUpdatePreference({ snooze_mode: option.value }, { syncNotifications: true });
                       }}
                       className={`flex-1 flex-row items-center justify-center gap-2 py-3 rounded-2xl border ${isSelected ? 'bg-[#2f00ff] border-[#2f00ff]' : 'bg-gray-50 border-gray-200'}`}
                     >
@@ -608,7 +634,7 @@ export default function SettingsScreen() {
                       key={mins}
                       onPress={() => {
                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        handleUpdatePreference({ default_snooze_minutes: mins });
+                        handleUpdatePreference({ default_snooze_minutes: mins }, { syncNotifications: true });
                       }}
                       className={`px-4 py-2 rounded-full border ${isSelected ? 'bg-[#2f00ff] border-[#2f00ff]' : 'bg-gray-50 border-gray-200'}`}
                     >
@@ -625,7 +651,7 @@ export default function SettingsScreen() {
             </View>
 
             {/* Snooze Presets */}
-            <View>
+            <View className={isQuickPresetMode ? '' : 'opacity-60'}>
               <View className="flex-row items-center gap-4 mb-3">
                 <View className="w-10 h-10 rounded-full bg-gray-50 items-center justify-center">
                   <MaterialIcons name="tune" size={20} color="#6b7280" />
@@ -635,13 +661,13 @@ export default function SettingsScreen() {
                     Quick Snooze Presets
                   </Text>
                   <Text className="text-xs text-gray-400" style={{ fontFamily: 'BricolageGrotesque-Regular' }}>
-                    Available snooze durations in presets mode
+                    Used for notification snooze buttons in Quick Presets mode (max 3)
                   </Text>
                 </View>
               </View>
               <View className="flex-row flex-wrap gap-2 ml-14">
                 {SNOOZE_PRESET_OPTIONS.map((mins) => {
-                  const isSelected = (preferences?.snooze_preset_values ?? [5, 10, 15, 30]).includes(mins);
+                  const isSelected = selectedSnoozePresets.includes(mins);
                   return (
                     <Pressable
                       key={mins}
@@ -661,6 +687,19 @@ export default function SettingsScreen() {
                   );
                 })}
               </View>
+              <Text className="text-[11px] text-gray-400 mt-3 ml-14" style={{ fontFamily: 'BricolageGrotesque-Regular' }}>
+                {selectedSnoozePresets.length}/{MAX_SNOOZE_PRESETS} selected
+              </Text>
+              {selectedSnoozePresets.length > MAX_SNOOZE_PRESETS && (
+                <Text className="text-[11px] text-amber-500 mt-1 ml-14" style={{ fontFamily: 'BricolageGrotesque-Regular' }}>
+                  Only the first {MAX_SNOOZE_PRESETS} presets are used in notifications.
+                </Text>
+              )}
+              {!isQuickPresetMode && (
+                <Text className="text-[11px] text-gray-400 mt-1 ml-14" style={{ fontFamily: 'BricolageGrotesque-Regular' }}>
+                  Switch Snooze Mode to Quick Presets to use these buttons in notifications.
+                </Text>
+              )}
             </View>
           </View>
         </AnimatedSection>

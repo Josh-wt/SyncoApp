@@ -175,7 +175,7 @@ export default function ActionPickerModal({
                           {option.label}
                         </Text>
                         {option.description ? (
-                          <Text style={styles.quickActionDescription} numberOfLines={1}>
+                          <Text style={styles.quickActionDescription} numberOfLines={2}>
                             {option.description}
                           </Text>
                         ) : null}
@@ -297,10 +297,11 @@ const styles = StyleSheet.create({
   },
   quickActionCard: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 10,
     paddingVertical: 12,
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
+    minHeight: 60,
     borderRadius: 16,
     backgroundColor: '#f8fafc',
     borderWidth: 1,
@@ -320,18 +321,22 @@ const styles = StyleSheet.create({
   },
   quickActionText: {
     flex: 1,
+    minWidth: 0,
+    paddingRight: 6,
   },
   quickActionLabel: {
     fontSize: 14,
     fontFamily: 'BricolageGrotesque-SemiBold',
     color: '#111827',
     letterSpacing: -0.2,
+    lineHeight: 18,
   },
   quickActionDescription: {
     fontSize: 12,
     fontFamily: 'BricolageGrotesque-Regular',
     color: '#6b7280',
     marginTop: 2,
+    lineHeight: 16,
   },
   actions: {
     paddingHorizontal: 8,
@@ -345,7 +350,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 14,
-    paddingHorizontal: 16,
+    paddingHorizontal: 18,
     borderRadius: 12,
     backgroundColor: 'transparent',
   },
@@ -373,6 +378,8 @@ const styles = StyleSheet.create({
     color: '#111827',
     flex: 1,
     minWidth: 0,
+    paddingRight: 10,
+    lineHeight: 20,
   },
   cancelSection: {
     paddingHorizontal: 8,

@@ -26,9 +26,8 @@ import * as Device from 'expo-device';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BackIcon, CalendarSmallIcon, ScheduleIcon, CheckAllIcon, GlowTopRight, GlowBottomLeft, BellNavIcon, RepeatIcon, ChevronRightIcon, CloseIcon, BlockIcon, DailyIcon, BookmarkIcon, SlidersIcon, CheckCircleIcon, MicSparkleIcon } from '../components/icons';
 import RecurringRuleModal from '../components/RecurringRuleModal';
-import TaskConfigSection, { QuickAction } from '../components/TaskConfigSection';
+import TaskConfigSection from '../components/TaskConfigSection';
 import { createRecurringRule, getRecurringRules } from '../lib/reminders';
-import { createReminderActions } from '../lib/reminderActions';
 import { parseReminderFromVoice, parseRemindersFromText, VoiceProcessResult } from '../lib/aiReminders';
 import { canCreateReminder } from '../lib/reminderLimits';
 import { useVoiceRecording } from '../hooks/useVoiceRecording';
@@ -642,7 +641,10 @@ function DateTimePicker({
 
 interface ManualCreateScreenProps {
   onBack: () => void;
-  onSave: (input: CreateReminderInput) => Promise<{ id: string } | void>;
+  onSave: (
+    input: CreateReminderInput,
+    options?: { actions?: CreateReminderActionInput[] }
+  ) => Promise<{ id: string } | void>;
 }
 
 function getNotifyLabel(minutes: number): string {
@@ -1281,22 +1283,19 @@ export default function ManualCreateScreen({ onBack, onSave }: ManualCreateScree
         recurringRuleId = newRule.id;
       }
 
-      const newReminder = await onSave({
+      await onSave({
         title: title.trim(),
         description: notes.trim() || undefined,
         scheduled_time: scheduledTime.toISOString(),
         is_priority: isPriority,
         notify_before_minutes: notifyBeforeMinutes,
         recurring_rule_id: recurringRuleId,
+      }, {
+        actions: reminderActions,
       });
 
-      // Return to timeline immediately; side work continues in background.
       setIsSaving(false);
       onBack();
-
-      if (reminderActions.length > 0 && newReminder?.id) {
-        void createReminderActions(newReminder.id, reminderActions).catch(() => {});
-      }
     } catch {
       // Error handled by parent
       setIsSaving(false);

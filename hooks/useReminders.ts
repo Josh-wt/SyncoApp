@@ -9,9 +9,14 @@ import {
   processRemindersStatus,
   updateReminder,
 } from '../lib/reminders';
-import { CreateReminderInput, Reminder, UpdateReminderInput } from '../lib/types';
+import { createReminderActions } from '../lib/reminderActions';
+import { CreateReminderActionInput, CreateReminderInput, Reminder, UpdateReminderInput } from '../lib/types';
 import { supabase } from '../lib/supabase';
 import { sendResyncPush, syncLocalReminderSchedules } from '../lib/notifications';
+
+type AddReminderOptions = {
+  actions?: CreateReminderActionInput[];
+};
 
 interface UseRemindersReturn {
   reminders: Reminder[];
@@ -20,7 +25,7 @@ interface UseRemindersReturn {
   isLoading: boolean;
   error: Error | null;
   refresh: () => Promise<void>;
-  addReminder: (input: CreateReminderInput) => Promise<Reminder>;
+  addReminder: (input: CreateReminderInput, options?: AddReminderOptions) => Promise<Reminder>;
   editReminder: (id: string, input: UpdateReminderInput) => Promise<Reminder>;
   removeReminder: (id: string) => Promise<void>;
 }
@@ -95,8 +100,13 @@ export function useReminders(): UseRemindersReturn {
     };
   }, [fetchData]);
 
-  const addReminder = useCallback(async (input: CreateReminderInput): Promise<Reminder> => {
+  const addReminder = useCallback(async (input: CreateReminderInput, options?: AddReminderOptions): Promise<Reminder> => {
     const newReminder = await createReminder(input);
+    const actions = options?.actions ?? [];
+
+    if (actions.length > 0) {
+      await createReminderActions(newReminder.id, actions);
+    }
 
     // Keep create UX snappy: refresh/sync in background.
     setReminders((prev) => {

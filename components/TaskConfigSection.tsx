@@ -183,6 +183,9 @@ export default function TaskConfigSection({ onActionsChange }: TaskConfigSection
   };
 
   const selectedCount = selectedActions.size;
+  const headerDetailText = selectedCount === 0
+    ? 'Add instant actions to this reminder'
+    : `${selectedCount} action${selectedCount > 1 ? 's' : ''} ready`;
   const chevronRotation = rotateAnim.interpolate({
     inputRange: [0, 1],
     outputRange: ['0deg', '180deg'],
@@ -214,10 +217,8 @@ export default function TaskConfigSection({ onActionsChange }: TaskConfigSection
             </View>
             <View style={styles.headerText}>
               <Text style={styles.headerTitle}>Quick Actions</Text>
-              <Text style={styles.headerSubtitle}>
-                {selectedCount === 0
-                  ? 'Add instant actions to this reminder'
-                  : `${selectedCount} action${selectedCount > 1 ? 's' : ''} ready to use`}
+              <Text style={styles.headerSubtitle} numberOfLines={2}>
+                {headerDetailText}
               </Text>
             </View>
             <View style={styles.headerMeta}>
@@ -227,7 +228,7 @@ export default function TaskConfigSection({ onActionsChange }: TaskConfigSection
                 </View>
               )}
               <Animated.View style={{ transform: [{ rotate: chevronRotation }] }}>
-                <MaterialIcons name="expand-more" size={26} color={PRIMARY_BLUE} />
+                <MaterialIcons name="expand-more" size={24} color="#b6aaf0" />
               </Animated.View>
             </View>
           </View>
@@ -343,85 +344,84 @@ const styles = StyleSheet.create({
     maxWidth: 560,
   },
   card: {
-    borderRadius: 26,
+    borderRadius: 16,
     overflow: 'hidden',
     backgroundColor: '#ffffff',
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: 'rgba(214, 198, 245, 0.45)',
   },
   headerPressed: {
-    opacity: 0.96,
-    transform: [{ scale: 0.98 }],
-    backgroundColor: '#f8fafc',
+    opacity: 0.97,
+    transform: [{ scale: 0.99 }],
+    backgroundColor: '#fbfaff',
   },
   headerPressable: {
-    borderTopLeftRadius: 26,
-    borderTopRightRadius: 26,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
   },
   headerPressableExpanded: {
     borderBottomWidth: 1,
-    borderBottomColor: '#edf1f7',
+    borderBottomColor: 'rgba(214, 198, 245, 0.35)',
   },
   headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    padding: 18,
+    gap: 14,
+    padding: 16,
   },
   headerBadge: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f8fafc',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
+    backgroundColor: 'rgba(214, 198, 245, 0.2)',
   },
   headerText: {
     flex: 1,
   },
   headerTitle: {
-    fontSize: 17,
+    fontSize: 10,
     fontFamily: 'BricolageGrotesque-Bold',
-    color: '#0f172a',
-    letterSpacing: -0.3,
+    color: 'rgba(18, 16, 24, 0.45)',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
   headerSubtitle: {
-    fontSize: 12,
-    fontFamily: 'BricolageGrotesque-Regular',
-    color: '#64748b',
+    marginTop: 3,
+    fontSize: 16,
+    fontFamily: 'BricolageGrotesque-Bold',
+    color: '#121018',
     letterSpacing: -0.2,
-    marginTop: 2,
   },
   headerMeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
   countPill: {
-    minWidth: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#0f172a',
+    minWidth: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(47, 0, 255, 0.12)',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 8,
+    paddingHorizontal: 7,
   },
   countPillText: {
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: 'BricolageGrotesque-SemiBold',
-    color: '#ffffff',
-    letterSpacing: -0.2,
+    color: '#2F00FF',
+    letterSpacing: 0,
   },
   contentWrapper: {
     overflow: 'hidden',
   },
   contentSurface: {
-    paddingTop: 18,
+    paddingTop: 16,
     paddingBottom: 18,
     paddingHorizontal: 16,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#ffffff',
   },
   sectionIntro: {
     marginBottom: 16,
