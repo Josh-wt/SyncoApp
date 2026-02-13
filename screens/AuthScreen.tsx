@@ -69,7 +69,7 @@ export default function AuthScreen({ onBack }: AuthScreenProps) {
       <View style={[styles.content, { paddingTop: insets.top + 60, paddingBottom: insets.bottom + 40 }]}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Welcome to Synco</Text>
+          <Text style={styles.title}>Welcome to Remmy</Text>
           <Text style={styles.subtitle}>
             Sign in to start creating and managing your reminders
           </Text>

@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -112,27 +112,37 @@ export default function TaskConfigSection({ onActionsChange }: TaskConfigSection
 
   const expandAnim = useRef(new Animated.Value(0)).current;
   const rotateAnim = useRef(new Animated.Value(0)).current;
+  const isAnimatingRef = useRef(false);
 
   const toggleExpanded = () => {
+    if (isAnimatingRef.current) return;
+
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     const newExpanded = !expanded;
     setExpanded(newExpanded);
+    isAnimatingRef.current = true;
 
     Animated.parallel([
-      Animated.spring(expandAnim, {
+      Animated.timing(expandAnim, {
         toValue: newExpanded ? 1 : 0,
+        duration: newExpanded ? 220 : 170,
+        easing: Easing.out(Easing.cubic),
         useNativeDriver: false,
-        tension: 100,
-        friction: 12,
       }),
-      Animated.spring(rotateAnim, {
+      Animated.timing(rotateAnim, {
         toValue: newExpanded ? 1 : 0,
+        duration: 170,
+        easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
-        tension: 100,
-        friction: 12,
       }),
-    ]).start();
+    ]).start(({ finished }) => {
+      if (finished) {
+        expandAnim.setValue(newExpanded ? 1 : 0);
+        rotateAnim.setValue(newExpanded ? 1 : 0);
+      }
+      isAnimatingRef.current = false;
+    });
   };
 
   const toggleAction = (type: string) => {

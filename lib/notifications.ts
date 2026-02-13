@@ -617,6 +617,7 @@ export async function handleNotificationResponse(
   if (handled) {
     return;
   }
-
-  onReminderTap?.(reminderId);
+  // Do not open the app for notification category actions.
+  // Only a direct tap on the notification body should open the app.
+  return;
 }

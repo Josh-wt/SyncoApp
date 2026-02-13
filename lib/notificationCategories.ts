@@ -227,7 +227,7 @@ export async function createDynamicNotificationCategory(
         submitButtonTitle: 'Snooze',
         placeholder: 'Minutes',
       },
-      options: { opensAppToForeground: true },
+      options: { opensAppToForeground: false },
     });
   } else {
     const availablePresetSlots = Math.max(1, MAX_NOTIFICATION_ACTIONS - notificationActions.length - 1);
@@ -250,7 +250,7 @@ export async function createDynamicNotificationCategory(
     identifier: `${PREFIX_COMPLETE}_${reminderId}`,
     buttonTitle: '✓ Complete',
     options: {
-      opensAppToForeground: true,
+      opensAppToForeground: false,
       isDestructive: true,
     },
   });

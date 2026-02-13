@@ -5,12 +5,12 @@
     "scheme": "synco",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/zero.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "buildNumber": "9",
+      "buildNumber": "10",
       "bundleIdentifier": "com.syncoapp.app",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "Allow Remmy to access your microphone to record voice reminders.",
@@ -36,7 +36,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "versionCode": 14,
+      "versionCode": 15,
       "package": "com.synco.app",
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
